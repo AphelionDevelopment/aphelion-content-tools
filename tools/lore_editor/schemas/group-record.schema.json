@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/AphelionDevelopment/aphelion-lore-tools/schema/group-record.json",
+  "$id": "https://github.com/AphelionDevelopment/aphelion-content-tools/schema/group-record.json",
   "title": "Aphelion lore group",
   "type": "object",
   "required": ["id", "label", "color", "keywords", "type_path_prefixes"],

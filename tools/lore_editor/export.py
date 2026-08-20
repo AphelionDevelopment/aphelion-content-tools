@@ -9,12 +9,12 @@ import shutil
 import tempfile
 
 from .app.manifest import ExportManifest, sha256_bytes
-from .catalog import validate_game_repository
 from .generate import generate_dm
-from .git_adapter import repository_revision, repository_status
 from .source import load_corpus
 from .validation import validate_corpus
 from .workspace import WorkspaceLayout
+from webapp.game_repository import validate_game_repository
+from webapp.git_adapter import repository_revision, repository_status
 
 
 ARTIFACT_RELATIVE_PATH = Path("modular_aphelion/modules/lore_overhaul/code/generated_lore_overrides.dm")

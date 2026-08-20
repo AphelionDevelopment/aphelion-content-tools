@@ -11,11 +11,20 @@
   --plasma: #d16aff;
   --muted: #c7a9d4;
   --border: #6c278d;
+  --home-accent: #f2a93c;
+  --home-accent-dark: #1f1400;
 }
 
 body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #310047, #17072e 62%); }
 .shell { max-width: 1500px; margin: 0 auto; padding: 1.5rem; }
 .hero { margin-bottom: 1rem; }
+.tool-nav { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.tool-pill { display: inline-block; padding: .5rem 1rem; border-radius: 999px; border: 1px solid var(--border); background: rgba(23, 7, 46, .68); color: var(--muted); text-decoration: none; font-size: .9rem; }
+.tool-pill:hover { background: var(--violet); color: #fff; }
+.tool-pill.active { background: var(--violet); border-color: var(--magenta); color: #fff; }
+.tool-pill.tool-pill-home { border-color: var(--home-accent); color: var(--home-accent); }
+.tool-pill.tool-pill-home:hover { background: var(--home-accent); color: var(--home-accent-dark); }
+.tool-pill.tool-pill-home.active { background: var(--home-accent); border-color: var(--home-accent); color: var(--home-accent-dark); }
 .eyebrow { color: var(--plasma); text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; margin: 0 0 .25rem; }
 h1 { margin: .25rem 0; font-size: clamp(2rem, 5vw, 4rem); color: #fff7ff; }
 h2, h3 { margin: .35rem 0 .6rem; }

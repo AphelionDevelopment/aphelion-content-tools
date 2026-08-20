@@ -10,8 +10,8 @@ import urllib.request
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SERVE_PATH = REPO_ROOT / "tools" / "lore_editor" / "serve.py"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SERVE_PATH = REPO_ROOT / "webapp" / "serve.py"
 
 
 class ServerStartupTests(unittest.TestCase):
@@ -64,14 +64,19 @@ class ServerStartupTests(unittest.TestCase):
 
 		self.assertEqual(status, 200)
 		self.assertEqual(content_type, "application/json")
-		self.assertEqual(json.loads(body), {"ok": True, "service": "lore-editor"})
+		self.assertEqual(json.loads(body), {"ok": True, "service": "aphelion-content-tools"})
 
-	def test_root_serves_editor_and_missing_path_is_404(self) -> None:
+	def test_root_serves_home_and_missing_path_is_404(self) -> None:
 		status, content_type, body = self.fetch("/")
 
 		self.assertEqual(status, 200)
 		self.assertEqual(content_type, "text/html")
-		self.assertIn("Lore Overhaul Editor", body)
+		self.assertIn("Aphelion Content Tools", body)
+		self.assertIn("Cache and Storage Management", body)
+		self.assertIn('id="repository-status-list"', body)
+		self.assertIn('id="export-stage-select"', body)
+		self.assertIn('href="/lore-editor"', body)
+		self.assertIn('href="/graph"', body)
 
 		missing_status, _missing_type, _missing_body = self.fetch("/missing")
 		self.assertEqual(missing_status, 404)
@@ -79,6 +84,37 @@ class ServerStartupTests(unittest.TestCase):
 		favicon_status, favicon_type, _favicon_body = self.fetch("/favicon.ico")
 		self.assertEqual(favicon_status, 200)
 		self.assertEqual(favicon_type, "image/svg+xml")
+
+	def test_lore_editor_page_and_its_assets_are_served(self) -> None:
+		html_status, html_type, html_body = self.fetch("/lore-editor")
+		self.assertEqual(html_status, 200)
+		self.assertEqual(html_type, "text/html")
+		self.assertIn("Lore Editor", html_body)
+		self.assertIn('id="entry-form"', html_body)
+		self.assertIn('href="/"', html_body)
+
+		js_status, js_type, _js_body = self.fetch("/lore-editor.js")
+		self.assertEqual(js_status, 200)
+		self.assertEqual(js_type, "text/javascript")
+
+	def test_graph_page_and_its_assets_are_served(self) -> None:
+		html_status, html_type, html_body = self.fetch("/graph")
+		self.assertEqual(html_status, 200)
+		self.assertEqual(html_type, "text/html")
+		self.assertIn("Content Graph", html_body)
+		self.assertIn('href="/"', html_body)
+		self.assertIn('href="/lore-editor"', html_body)
+		self.assertIn('id="debug-core-file"', html_body)
+		self.assertIn('id="explorer-tree"', html_body)
+		self.assertIn('id="physics-stats"', html_body)
+
+		js_status, js_type, _js_body = self.fetch("/graph.js")
+		self.assertEqual(js_status, 200)
+		self.assertEqual(js_type, "text/javascript")
+
+		css_status, css_type, _css_body = self.fetch("/graph.css")
+		self.assertEqual(css_status, 200)
+		self.assertEqual(css_type, "text/css")
 
 
 if __name__ == "__main__":

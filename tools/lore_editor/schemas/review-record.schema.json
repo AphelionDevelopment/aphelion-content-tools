@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/AphelionDevelopment/aphelion-lore-tools/schema/review-record.json",
+  "$id": "https://github.com/AphelionDevelopment/aphelion-content-tools/schema/review-record.json",
   "title": "Aphelion lore review",
   "type": "object",
   "required": ["id", "type_path", "status", "reviewed_by", "reviewed_at", "notes"],

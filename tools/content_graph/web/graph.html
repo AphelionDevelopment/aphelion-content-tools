@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Content Graph — Aphelion Content Tools</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/graph.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">Aphelion Content Tools</p>
+      <h1>Content Graph</h1>
+      <p class="subtitle">Modules, master_files overrides, and NOVA/APHELION EDIT markers in the selected game checkout.</p>
+    </header>
+
+    <nav class="tool-nav" aria-label="Tools">
+      <a class="tool-pill tool-pill-home" href="/">Home</a>
+      <a class="tool-pill" href="/lore-editor">Lore Editor</a>
+      <span class="tool-pill active" aria-current="page">Content Graph</span>
+    </nav>
+
+    <section class="card status-bar">
+      <div id="graph-status">Loading…</div>
+      <div class="button-row">
+        <button id="scan-button" type="button">Scan modular content</button>
+        <button id="refresh-button" type="button" class="secondary-button">Refresh from cache</button>
+      </div>
+      <pre id="scan-output" class="tool-output" hidden></pre>
+    </section>
+
+    <section class="card detail-panel">
+      <h2>Details</h2>
+      <div id="node-detail">
+        <p class="metadata">Click a node to inspect it. Drag a node to reposition it.</p>
+      </div>
+    </section>
+
+    <section class="graph-layout">
+      <aside class="card explorer-panel">
+        <details class="collapsible-section" open>
+          <summary>Filters</summary>
+          <fieldset>
+            <legend>Node kinds</legend>
+            <label class="checkbox-label"><input type="checkbox" data-kind="module" checked /> Modules</label>
+            <label class="checkbox-label"><input type="checkbox" data-kind="master_file" checked /> master_files overrides</label>
+            <label class="checkbox-label"><input type="checkbox" data-kind="core_file" checked /> Core files with markers</label>
+            <label class="checkbox-label"><input type="checkbox" data-kind="directory" checked /> Directories</label>
+            <label class="checkbox-label"><input type="checkbox" data-kind="file" checked /> Other files</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Owner</legend>
+            <label class="checkbox-label"><input type="checkbox" data-owner="nova" checked /> Nova</label>
+            <label class="checkbox-label"><input type="checkbox" data-owner="aphelion" checked /> Aphelion</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Edge relations</legend>
+            <label class="checkbox-label"><input type="checkbox" data-relation="master_files_mirror" checked /> master_files mirror</label>
+            <label class="checkbox-label"><input type="checkbox" data-relation="marker_edit" checked /> Marker edit</label>
+            <label class="checkbox-label"><input type="checkbox" data-relation="contains" checked /> Repository structure</label>
+          </fieldset>
+        </details>
+
+        <h2>Explorer</h2>
+        <input id="explorer-filter" type="search" placeholder="Filter files and folders" />
+        <div class="button-row">
+          <button id="explorer-reset" type="button" class="secondary-button">Reset to default view</button>
+        </div>
+        <p class="metadata" id="scope-summary"></p>
+        <div id="explorer-tree" class="explorer-tree" role="tree"></div>
+      </aside>
+
+      <div class="card canvas-panel">
+        <div class="canvas-overlay canvas-search-overlay">
+          <input id="node-search" type="search" placeholder="Module id, path, or label" />
+        </div>
+        <div id="node-tooltip" class="node-tooltip" hidden></div>
+        <canvas id="graph-canvas"></canvas>
+      </div>
+    </section>
+
+    <section class="card physics-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Physics</h2>
+          <p class="metadata">Live-tune the layout simulation, or regenerate it from scratch.</p>
+        </div>
+        <button id="regenerate-layout-button" type="button" class="secondary-button">Regenerate layout</button>
+      </div>
+      <div class="physics-columns">
+        <fieldset>
+          <legend>Forces</legend>
+          <label class="slider-label">Repel force
+            <input type="range" data-force="repulsion" min="500" max="6000" step="100" value="2600" />
+          </label>
+          <label class="slider-label">Link force
+            <input type="range" data-force="springStrength" min="0.002" max="0.08" step="0.002" value="0.02" />
+          </label>
+          <label class="slider-label">Link distance
+            <input type="range" data-force="springLength" min="20" max="200" step="5" value="70" />
+          </label>
+          <label class="slider-label">Center force
+            <input type="range" data-force="center" min="0" max="0.02" step="0.001" value="0.004" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Performance</legend>
+          <div id="physics-stats" class="metadata"></div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section class="card debug-panel">
+      <h2>Debug</h2>
+      <p class="metadata">Query the cached graph directly instead of hunting for it on the canvas.</p>
+
+      <label for="debug-core-file">Edits touching a core file (exact path)</label>
+      <div class="button-row">
+        <input id="debug-core-file" type="search" placeholder="code/modules/shuttle/shuttle.dm" />
+        <button id="debug-core-file-button" type="button" class="secondary-button">Look up edits</button>
+      </div>
+
+      <div class="button-row">
+        <button id="debug-missing-readme-button" type="button" class="secondary-button">Modules missing readme.md</button>
+        <button id="debug-unresolved-button" type="button" class="secondary-button">Unresolved markers</button>
+      </div>
+
+      <div id="debug-results" class="unresolved-list"></div>
+
+      <h3>Unresolved markers</h3>
+      <p class="metadata">Markers whose module attribution could not be confirmed against a real module directory.</p>
+      <div id="unresolved-list" class="unresolved-list"></div>
+    </section>
+  </main>
+
+  <script src="/graph.js"></script>
+</body>
+</html>

@@ -10,14 +10,7 @@ from pathlib import Path
 
 MAX_OUTPUT_CHARACTERS = 64_000
 MAX_LOG_CHARACTERS = 1_000_000
-LOG_ROOT = Path("logs/lore_editor")
-
-
-def _log_root(repo_root: Path) -> Path:
-	resolved_root = repo_root.resolve()
-	if (resolved_root / "tools/lore_editor/catalog").is_dir() or (resolved_root / "tools/lore_editor/content").is_dir():
-		return Path("tools/lore_editor/logs")
-	return LOG_ROOT
+LOG_ROOT = Path("tools/logs")
 
 
 @dataclass(frozen=True)
@@ -25,77 +18,52 @@ class ToolDefinition:
 	id: str
 	label: str
 	description: str
+	tool_root: str
 	commands: tuple[tuple[str, ...], ...]
+	game_repo_commands: frozenset[str] = frozenset()
 
 
-TOOL_DEFINITIONS = (
-	ToolDefinition(
-		id="catalog-refresh",
-		label="Refresh catalog",
-		description="Recompile the BYOND catalog probe and refresh targets.json.",
-		commands=(("catalog-refresh",),),
-	),
-	ToolDefinition(
-		id="validate",
-		label="Validate content",
-		description="Validate lore JSON and check the generated DM artifact.",
-		commands=(("validate", "--check-generated"),),
-	),
-	ToolDefinition(
-		id="generate",
-		label="Generate DM",
-		description="Regenerate the checked-in lore override DM artifact.",
-		commands=(("generate",),),
-	),
-	ToolDefinition(
-		id="refresh-validate",
-		label="Refresh and validate",
-		description="Refresh the BYOND catalog, then validate the resulting lore content.",
-		commands=(("catalog-refresh",), ("validate", "--check-generated")),
-	),
-)
-
-
-_TOOL_BY_ID = {definition.id: definition for definition in TOOL_DEFINITIONS}
 _RUNS: dict[str, dict[str, object]] = {}
 _RUNS_LOCK = threading.Lock()
 
 
-def list_tools() -> list[dict[str, str]]:
+def list_tools(definitions: tuple[ToolDefinition, ...]) -> list[dict[str, str]]:
 	return [
 		{"id": definition.id, "label": definition.label, "description": definition.description}
-		for definition in TOOL_DEFINITIONS
+		for definition in definitions
 	]
 
 
-def _definition(tool_id: str) -> ToolDefinition:
-	try:
-		return _TOOL_BY_ID[tool_id]
-	except KeyError as exc:
-		raise ValueError(f"Unknown lore tool '{tool_id}'.") from exc
+def _find_definition(definitions: tuple[ToolDefinition, ...], tool_id: str) -> ToolDefinition:
+	for definition in definitions:
+		if definition.id == tool_id:
+			return definition
+	raise ValueError(f"Unknown tool '{tool_id}'.")
 
 
 def build_tool_command(
 	repo_root: Path,
-	tool_id: str,
+	definition: ToolDefinition,
 	command_index: int = 0,
 	*,
 	game_repo_root: Path | None = None,
 ) -> list[str]:
-	definition = _definition(tool_id)
 	if command_index < 0 or command_index >= len(definition.commands):
-		raise ValueError(f"Tool '{tool_id}' has no command at index {command_index}.")
-	cli_path = (repo_root.resolve() / "tools/lore_editor/cli.py").resolve()
-	if not cli_path.is_relative_to(repo_root.resolve()):
-		raise ValueError("Lore tool CLI must remain inside the repository root.")
-	command = [sys.executable, str(cli_path), *definition.commands[command_index], "--repo-root", str(repo_root.resolve())]
-	if game_repo_root is not None and any(command_name in {"catalog-refresh", "validate"} for command_name in definition.commands[command_index]):
+		raise ValueError(f"Tool '{definition.id}' has no command at index {command_index}.")
+	resolved_root = repo_root.resolve()
+	cli_path = (resolved_root / definition.tool_root / "cli.py").resolve()
+	if not cli_path.is_relative_to(resolved_root):
+		raise ValueError("Tool CLI must remain inside the repository root.")
+	command = [sys.executable, str(cli_path), *definition.commands[command_index], "--repo-root", str(resolved_root)]
+	if game_repo_root is not None and any(
+		command_name in definition.game_repo_commands for command_name in definition.commands[command_index]
+	):
 		command.extend(("--game-repo", str(game_repo_root.resolve())))
 	return command
 
 
 def _append_log(repo_root: Path, run_id: str, text: str) -> None:
-	log_path = repo_root.resolve() / _log_root(repo_root) / f"{run_id}.log"
+	log_path = repo_root.resolve() / LOG_ROOT / f"{run_id}.log"
 	try:
 		log_path.parent.mkdir(parents=True, exist_ok=True)
 		if log_path.exists() and log_path.stat().st_size >= MAX_LOG_CHARACTERS:
@@ -116,14 +84,13 @@ def _append_output(repo_root: Path, run_id: str, text: str) -> None:
 	_append_log(repo_root, run_id, text)
 
 
-def _execute_tool(repo_root: Path, run_id: str, tool_id: str, game_repo_root: Path | None) -> None:
+def _execute_tool(repo_root: Path, run_id: str, definition: ToolDefinition, game_repo_root: Path | None) -> None:
 	with _RUNS_LOCK:
 		_RUNS[run_id]["status"] = "running"
-	_append_output(repo_root, run_id, f"Starting {tool_id}.\n")
+	_append_output(repo_root, run_id, f"Starting {definition.id}.\n")
 	try:
-		definition = _definition(tool_id)
 		for command_index, _command in enumerate(definition.commands):
-			command = build_tool_command(repo_root, tool_id, command_index, game_repo_root=game_repo_root)
+			command = build_tool_command(repo_root, definition, command_index, game_repo_root=game_repo_root)
 			_append_output(repo_root, run_id, f"Command {command_index + 1}: {subprocess.list2cmdline(command)}\n")
 			process = subprocess.Popen(
 				command,
@@ -158,10 +125,16 @@ def _execute_tool(repo_root: Path, run_id: str, tool_id: str, game_repo_root: Pa
 			_RUNS[run_id]["exit_code"] = None
 
 
-def start_tool(repo_root: Path, tool_id: str, *, game_repo_root: Path | None = None) -> dict[str, object]:
-	_definition(tool_id)
+def start_tool(
+	repo_root: Path,
+	definitions: tuple[ToolDefinition, ...],
+	tool_id: str,
+	*,
+	game_repo_root: Path | None = None,
+) -> dict[str, object]:
+	definition = _find_definition(definitions, tool_id)
 	run_id = uuid.uuid4().hex
-	log_path = _log_root(repo_root) / f"{run_id}.log"
+	log_path = LOG_ROOT / f"{run_id}.log"
 	with _RUNS_LOCK:
 		_RUNS[run_id] = {
 			"run_id": run_id,
@@ -174,7 +147,7 @@ def start_tool(repo_root: Path, tool_id: str, *, game_repo_root: Path | None = N
 	_append_log(repo_root.resolve(), run_id, f"Queued {tool_id}.\n")
 	thread = threading.Thread(
 		target=_execute_tool,
-		args=(repo_root.resolve(), run_id, tool_id, game_repo_root.resolve() if game_repo_root else None),
+		args=(repo_root.resolve(), run_id, definition, game_repo_root.resolve() if game_repo_root else None),
 		daemon=True,
 	)
 	thread.start()
@@ -184,5 +157,5 @@ def start_tool(repo_root: Path, tool_id: str, *, game_repo_root: Path | None = N
 def get_tool_run(run_id: str) -> dict[str, object]:
 	with _RUNS_LOCK:
 		if run_id not in _RUNS:
-			raise ValueError(f"Unknown lore tool run '{run_id}'.")
+			raise ValueError(f"Unknown tool run '{run_id}'.")
 		return dict(_RUNS[run_id])

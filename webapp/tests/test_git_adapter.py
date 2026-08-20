@@ -7,10 +7,11 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from tools.lore_editor import git_adapter
-from tools.lore_editor.git_adapter import (
+from webapp import git_adapter
+from webapp.git_adapter import (
 	GitAdapterError,
 	create_branch,
+	list_tracked_files,
 	open_in_github_desktop,
 	repository_remote_url,
 	repository_status,
@@ -217,7 +218,7 @@ class GitAdapterTests(unittest.TestCase):
 		temporary_directory, repo_root = self.make_repo()
 		self.addCleanup(temporary_directory.cleanup)
 
-		with patch("tools.lore_editor.git_adapter.find_github_desktop_launcher", return_value=None):
+		with patch("webapp.git_adapter.find_github_desktop_launcher", return_value=None):
 			with self.assertRaisesRegex(GitAdapterError, "GitHub Desktop"):
 				open_in_github_desktop(repo_root)
 
@@ -233,6 +234,25 @@ class GitAdapterTests(unittest.TestCase):
 		self.addCleanup(temporary_directory.cleanup)
 
 		self.assertIsNone(repository_remote_url(repo_root))
+
+	def test_list_tracked_files_returns_sorted_repo_relative_paths(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		(repo_root / "nested").mkdir()
+		(repo_root / "nested" / "b.txt").write_text("b\n", encoding="utf-8")
+		(repo_root / "a.txt").write_text("a\n", encoding="utf-8")
+		(repo_root / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+		run_git(repo_root, "add", "--", "nested/b.txt", "a.txt")
+		run_git(repo_root, "commit", "-m", "Add tracked files")
+
+		self.assertEqual(("README.md", "a.txt", "nested/b.txt"), list_tracked_files(repo_root))
+
+	def test_list_tracked_files_raises_when_not_a_git_repository(self) -> None:
+		temporary_directory = TemporaryDirectory()
+		self.addCleanup(temporary_directory.cleanup)
+
+		with self.assertRaises(GitAdapterError):
+			list_tracked_files(Path(temporary_directory.name))
 
 	def test_truncate_output_bounds_long_text(self) -> None:
 		long_text = "x" * 20_000
@@ -319,8 +339,8 @@ class GitAdapterTests(unittest.TestCase):
 	def test_open_in_github_desktop_uses_detected_launcher(self) -> None:
 		temporary_directory, repo_root = self.make_repo()
 		self.addCleanup(temporary_directory.cleanup)
-		with patch("tools.lore_editor.git_adapter.find_github_desktop_launcher", return_value="github.bat"), patch(
-			"tools.lore_editor.git_adapter.subprocess.Popen",
+		with patch("webapp.git_adapter.find_github_desktop_launcher", return_value="github.bat"), patch(
+			"webapp.git_adapter.subprocess.Popen",
 		) as popen:
 			open_in_github_desktop(repo_root)
 

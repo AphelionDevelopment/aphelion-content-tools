@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 
-LAUNCHER_CMD_PATH = Path(__file__).resolve().parents[3] / "Launch Lore Tools.cmd"
+LAUNCHER_CMD_PATH = Path(__file__).resolve().parents[3] / "Launch Aphelion Content Tools.cmd"
 
 
 class LauncherCmdArgumentQuotingTests(unittest.TestCase):

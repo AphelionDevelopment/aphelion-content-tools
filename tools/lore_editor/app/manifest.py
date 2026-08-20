@@ -1,29 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
-from typing import Mapping
 
+from webapp.manifest_base import (
+	MANIFEST_FORMAT_VERSION,
+	required_string as _required_string,
+	required_string_list as _required_string_list,
+	sha256_bytes,
+)
 
-MANIFEST_FORMAT_VERSION = 1
-
-
-def sha256_bytes(value: bytes) -> str:
-	return hashlib.sha256(value).hexdigest()
-
-
-def _required_string(payload: Mapping[str, object], field_name: str) -> str:
-	value = payload.get(field_name)
-	if not isinstance(value, str) or not value:
-		raise ValueError(f"Manifest field '{field_name}' must be a non-empty string.")
-	return value
-
-
-def _required_string_list(payload: Mapping[str, object], field_name: str) -> tuple[str, ...]:
-	value = payload.get(field_name)
-	if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
-		raise ValueError(f"Manifest field '{field_name}' must be an array of non-empty strings.")
-	return tuple(value)
+__all__ = ["MANIFEST_FORMAT_VERSION", "sha256_bytes", "CatalogManifest", "ExportManifest"]
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/AphelionDevelopment/aphelion-lore-tools/schema/lore-entry.json",
+  "$id": "https://github.com/AphelionDevelopment/aphelion-content-tools/schema/lore-entry.json",
   "title": "Aphelion lore override",
   "type": "object",
   "required": ["id", "type_path"],

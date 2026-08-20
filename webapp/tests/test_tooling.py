@@ -1,12 +1,29 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
-from tools.lore_editor.tooling import build_tool_command, get_tool_run, list_tools, start_tool
+from webapp.tooling import ToolDefinition, build_tool_command, get_tool_run, list_tools, start_tool
+
+
+GENERATE_DEFINITION = ToolDefinition(
+	id="generate",
+	label="Generate DM",
+	description="Regenerate the checked-in lore override DM artifact.",
+	tool_root="tools/lore_editor",
+	commands=(("generate",),),
+)
+VALIDATE_DEFINITION = ToolDefinition(
+	id="validate",
+	label="Validate content",
+	description="Validate lore JSON and check the generated DM artifact.",
+	tool_root="tools/lore_editor",
+	commands=(("validate", "--check-generated"),),
+	game_repo_commands=frozenset({"validate"}),
+)
+TEST_DEFINITIONS = (GENERATE_DEFINITION, VALIDATE_DEFINITION)
 
 
 class ToolingTests(unittest.TestCase):
@@ -24,20 +41,17 @@ class ToolingTests(unittest.TestCase):
 		self.temp_dir.cleanup()
 
 	def test_allowlist_exposes_named_tools_and_fixed_commands(self) -> None:
-		tools = list_tools()
-		self.assertEqual(
-			{tool["id"] for tool in tools},
-			{"catalog-refresh", "validate", "generate", "refresh-validate"},
-		)
-		command = build_tool_command(self.repo_root, "validate")
+		tools = list_tools(TEST_DEFINITIONS)
+		self.assertEqual({tool["id"] for tool in tools}, {"generate", "validate"})
+		command = build_tool_command(self.repo_root, VALIDATE_DEFINITION)
 		self.assertEqual(command[0], __import__("sys").executable)
 		self.assertIn("tools/lore_editor/cli.py", command[1].replace("\\", "/"))
 		self.assertIn("--check-generated", command)
 		with self.assertRaises(ValueError):
-			build_tool_command(self.repo_root, "powershell")
+			build_tool_command(self.repo_root, VALIDATE_DEFINITION, command_index=5)
 
 	def test_generate_tool_runs_to_completion_and_captures_output(self) -> None:
-		run = start_tool(self.repo_root, "generate")
+		run = start_tool(self.repo_root, TEST_DEFINITIONS, "generate")
 		self.assertIn(run["status"], {"queued", "running"})
 		deadline = time.monotonic() + 10
 		while time.monotonic() < deadline:
@@ -56,7 +70,7 @@ class ToolingTests(unittest.TestCase):
 
 	def test_unknown_tool_and_unknown_run_are_rejected(self) -> None:
 		with self.assertRaises(ValueError):
-			start_tool(self.repo_root, "arbitrary-command")
+			start_tool(self.repo_root, TEST_DEFINITIONS, "arbitrary-command")
 		with self.assertRaises(ValueError):
 			get_tool_run("missing-run")
 

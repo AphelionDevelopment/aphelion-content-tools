@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from functools import partial
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,48 +25,61 @@ def _query_int(query: dict[str, list[str]], name: str, *, default: int | None = 
 
 
 def _load_api_functions():
-	if __package__ in (None, ""):
-		from tools.lore_editor.api import catalog_response, generate_output, groups_response, icon_files_response, icon_states_response, list_entries_response, list_icon_choices, list_review_response
-		from tools.lore_editor.api import create_entry, list_entity_files, save_group_response, save_review_response
-		from tools.lore_editor.api import save_entry, validate_entries, validate_entry
-		from tools.lore_editor.tooling import get_tool_run, list_tools, start_tool
-		from tools.lore_editor.icon_preview import IconPreviewNotFound, render_icon_preview
-	else:
-		from .api import catalog_response, generate_output, groups_response, icon_files_response, icon_states_response, list_entries_response, list_icon_choices, list_review_response
-		from .api import create_entry, list_entity_files, save_group_response, save_review_response
-		from .api import save_entry, validate_entries, validate_entry
-		from .tooling import get_tool_run, list_tools, start_tool
-		from .icon_preview import IconPreviewNotFound, render_icon_preview
-	return catalog_response, generate_output, list_entries_response, list_icon_choices, save_entry, validate_entries, validate_entry, IconPreviewNotFound, render_icon_preview, list_review_response, groups_response, save_group_response, save_review_response, create_entry, list_entity_files, list_tools, start_tool, get_tool_run, icon_files_response, icon_states_response
+	from tools.lore_editor.api import catalog_response, generate_output, groups_response, icon_files_response, icon_states_response, list_entries_response, list_icon_choices, list_review_response
+	from tools.lore_editor.api import create_entry, list_entity_files, save_group_response, save_review_response
+	from tools.lore_editor.api import save_entry, validate_entries, validate_entry
+	from tools.lore_editor.icon_preview import IconPreviewNotFound, render_icon_preview
+	return catalog_response, generate_output, list_entries_response, list_icon_choices, save_entry, validate_entries, validate_entry, IconPreviewNotFound, render_icon_preview, list_review_response, groups_response, save_group_response, save_review_response, create_entry, list_entity_files, icon_files_response, icon_states_response
 
 
 def _load_git_functions():
 	if __package__ in (None, ""):
-		from tools.lore_editor.git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
+		from webapp.git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
 	else:
 		from .git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
 	return create_branch, repository_status, stage_and_commit, open_in_github_desktop
 
 
-def _load_export_functions():
+def _load_tooling_functions():
 	if __package__ in (None, ""):
-		from tools.lore_editor.export import apply_export, prepare_export
+		from webapp.tooling import get_tool_run, list_tools, start_tool
 	else:
-		from .export import apply_export, prepare_export
+		from .tooling import get_tool_run, list_tools, start_tool
+	return list_tools, start_tool, get_tool_run
+
+
+def _load_tool_registry():
+	from tools.content_graph.tool_definitions import TOOL_DEFINITIONS as GRAPH_TOOL_DEFINITIONS
+	from tools.lore_editor.tool_definitions import TOOL_DEFINITIONS as LORE_TOOL_DEFINITIONS
+	return LORE_TOOL_DEFINITIONS + GRAPH_TOOL_DEFINITIONS
+
+
+def _load_export_functions():
+	from tools.lore_editor.export import apply_export, prepare_export
 	return prepare_export, apply_export
 
 
-class LoreEditorServer(ThreadingHTTPServer):
+def _load_graph_functions():
+	from tools.content_graph.graph import read_graph_cache
+	return (read_graph_cache,)
+
+
+def _load_graph_query_functions():
+	from tools.content_graph.queries import edits_for_core_file, modules_missing_readme, unresolved_markers
+	return edits_for_core_file, modules_missing_readme, unresolved_markers
+
+
+class WebAppServer(ThreadingHTTPServer):
 	allow_reuse_address = True
 
 	def __init__(self, server_address: tuple[str, int], repo_root: Path, game_repo_root: Path | None = None):
 		self.repo_root = repo_root.resolve()
 		self.game_repo_root = (game_repo_root or repo_root).resolve()
-		super().__init__(server_address, LoreEditorRequestHandler)
+		super().__init__(server_address, WebAppRequestHandler)
 
 
-class LoreEditorRequestHandler(BaseHTTPRequestHandler):
-	server: LoreEditorServer
+class WebAppRequestHandler(BaseHTTPRequestHandler):
+	server: WebAppServer
 	MAX_REQUEST_BYTES = 1_000_000
 
 	def log_message(self, format: str, *args: object) -> None:
@@ -126,6 +138,15 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 			return
 		self.send_bytes(path.read_bytes(), content_type)
 
+	def serve_tool_static(self, tool_web_root: str, filename: str, content_type: str) -> None:
+		"""Serve a static asset from a tool's own web/ directory (e.g. tools/content_graph/web/)."""
+		root = (WEB_ROOT.parent.parent / tool_web_root).resolve()
+		path = (root / filename).resolve()
+		if not path.is_relative_to(root) or not path.is_file():
+			self.send_error_json(HTTPStatus.NOT_FOUND, "Resource not found.")
+			return
+		self.send_bytes(path.read_bytes(), content_type)
+
 	def do_GET(self) -> None:
 		parsed = urlparse(self.path)
 		if parsed.path == "/":
@@ -140,8 +161,23 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 		if parsed.path in {"/favicon.svg", "/favicon.ico"}:
 			self.serve_static("favicon.svg", "image/svg+xml")
 			return
+		if parsed.path == "/graph":
+			self.serve_tool_static("tools/content_graph/web", "graph.html", "text/html; charset=utf-8")
+			return
+		if parsed.path == "/graph.js":
+			self.serve_tool_static("tools/content_graph/web", "graph.js", "text/javascript; charset=utf-8")
+			return
+		if parsed.path == "/graph.css":
+			self.serve_tool_static("tools/content_graph/web", "graph.css", "text/css; charset=utf-8")
+			return
+		if parsed.path == "/lore-editor":
+			self.serve_tool_static("tools/lore_editor/web", "index.html", "text/html; charset=utf-8")
+			return
+		if parsed.path == "/lore-editor.js":
+			self.serve_tool_static("tools/lore_editor/web", "app.js", "text/javascript; charset=utf-8")
+			return
 		if parsed.path == "/api/health":
-			self.send_json({"ok": True, "service": "lore-editor"})
+			self.send_json({"ok": True, "service": "aphelion-content-tools"})
 			return
 		if parsed.path == "/api/git/status":
 			try:
@@ -172,6 +208,79 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 			try:
 				catalog_response = _load_api_functions()[0]
 				self.send_json(catalog_response(self.server.repo_root))
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/graph":
+			try:
+				read_graph_cache = _load_graph_functions()[0]
+				cached = read_graph_cache(self.server.repo_root)
+				if cached is None:
+					self.send_json({"scanned": False, "graph": None, "manifest": None})
+					return
+				graph, manifest = cached
+				self.send_json({"scanned": True, "graph": graph, "manifest": manifest.to_dict()})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/graph/status":
+			try:
+				read_graph_cache = _load_graph_functions()[0]
+				cached = read_graph_cache(self.server.repo_root)
+				if cached is None:
+					self.send_json({"scanned": False, "manifest": None})
+					return
+				_graph, manifest = cached
+				self.send_json({"scanned": True, "manifest": manifest.to_dict()})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/graph/edits":
+			try:
+				read_graph_cache = _load_graph_functions()[0]
+				edits_for_core_file = _load_graph_query_functions()[0]
+				cached = read_graph_cache(self.server.repo_root)
+				if cached is None:
+					self.send_json({"scanned": False, "edits": []})
+					return
+				graph, _manifest = cached
+				query = parse_qs(parsed.query)
+				core_file = query.get("core_file", [""])[0]
+				if not core_file:
+					self.send_error_json(HTTPStatus.BAD_REQUEST, "Query parameter 'core_file' is required.")
+					return
+				self.send_json({"scanned": True, "edits": edits_for_core_file(graph, core_file)})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/graph/modules":
+			try:
+				read_graph_cache = _load_graph_functions()[0]
+				modules_missing_readme = _load_graph_query_functions()[1]
+				cached = read_graph_cache(self.server.repo_root)
+				if cached is None:
+					self.send_json({"scanned": False, "modules": []})
+					return
+				graph, _manifest = cached
+				query = parse_qs(parsed.query)
+				if query.get("missing_readme", [""])[0].lower() == "true":
+					modules = modules_missing_readme(graph)
+				else:
+					modules = [node for node in graph["nodes"] if node.get("kind") == "module"]
+				self.send_json({"scanned": True, "modules": modules})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/graph/unresolved":
+			try:
+				read_graph_cache = _load_graph_functions()[0]
+				unresolved_markers = _load_graph_query_functions()[2]
+				cached = read_graph_cache(self.server.repo_root)
+				if cached is None:
+					self.send_json({"scanned": False, "unresolved_markers": []})
+					return
+				graph, _manifest = cached
+				self.send_json({"scanned": True, "unresolved_markers": unresolved_markers(graph)})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
@@ -228,14 +337,14 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/tools":
 			try:
-				list_tools = _load_api_functions()[15]
-				self.send_json({"tools": list_tools()})
+				list_tools = _load_tooling_functions()[0]
+				self.send_json({"tools": list_tools(_load_tool_registry())})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
 		if parsed.path == "/api/icon-files":
 			try:
-				icon_files_response = _load_api_functions()[18]
+				icon_files_response = _load_api_functions()[15]
 				self.send_json(icon_files_response(self.server.repo_root, asset_root=self.server.game_repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -243,7 +352,7 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 		tool_run_prefix = "/api/tools/runs/"
 		if parsed.path.startswith(tool_run_prefix):
 			try:
-				get_tool_run = _load_api_functions()[17]
+				get_tool_run = _load_tooling_functions()[2]
 				self.send_json(get_tool_run(unquote(parsed.path[len(tool_run_prefix):])))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -261,7 +370,7 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 				relative_file = query.get("file", [""])[0]
 				if not relative_file:
 					raise ValueError("Icon state lookup requires a file query parameter.")
-				icon_states_response = _load_api_functions()[19]
+				icon_states_response = _load_api_functions()[16]
 				self.send_json(icon_states_response(self.server.repo_root, relative_file, asset_root=self.server.game_repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -417,8 +526,8 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 				self.send_error_json(HTTPStatus.NOT_FOUND, "Tool runs are read-only.")
 				return
 			try:
-				start_tool = _load_api_functions()[16]
-				self.send_json(start_tool(self.server.repo_root, tool_id, game_repo_root=self.server.game_repo_root))
+				start_tool = _load_tooling_functions()[1]
+				self.send_json(start_tool(self.server.repo_root, _load_tool_registry(), tool_id, game_repo_root=self.server.game_repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
@@ -499,5 +608,5 @@ class LoreEditorRequestHandler(BaseHTTPRequestHandler):
 			self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
 
-def create_server(repo_root: Path, port: int = 0, *, game_repo_root: Path | None = None) -> LoreEditorServer:
-	return LoreEditorServer(("127.0.0.1", port), repo_root, game_repo_root)
+def create_server(repo_root: Path, port: int = 0, *, game_repo_root: Path | None = None) -> WebAppServer:
+	return WebAppServer(("127.0.0.1", port), repo_root, game_repo_root)

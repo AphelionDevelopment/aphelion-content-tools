@@ -176,6 +176,14 @@ def repository_remote_url(repo_root: Path, remote_name: str = "origin") -> str |
 	return url or None
 
 
+def list_tracked_files(repo_root: Path) -> tuple[str, ...]:
+	"""Return every Git-tracked file path in the repository, repo-relative and posix-styled, sorted."""
+	with _repo_lock(repo_root):
+		result = _run_git(repo_root, ["ls-files", "-z"])
+	paths = [path for path in result.stdout.split("\0") if path]
+	return tuple(sorted(paths))
+
+
 def create_branch(repo_root: Path, branch_name: str) -> None:
 	if not branch_name or branch_name.startswith("-") or ".." in branch_name or "//" in branch_name or "@{" in branch_name:
 		raise ValueError("Branch name contains unsafe Git reference syntax.")

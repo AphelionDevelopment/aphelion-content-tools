@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image
 
 from tools.dmi import Dmi
-from tools.lore_editor.server import create_server
+from webapp.server import create_server
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -268,7 +268,7 @@ class ServerApiTests(unittest.TestCase):
 		self.assertEqual(status, 200)
 		self.assertEqual(
 			{tool["id"] for tool in payload["tools"]},
-			{"catalog-refresh", "validate", "generate", "refresh-validate"},
+			{"catalog-refresh", "validate", "generate", "refresh-validate", "scan-content"},
 		)
 		bad_status, _bad_type, _bad_payload = self.request("/api/tools/arbitrary-command", method="POST")
 		self.assertEqual(bad_status, 400)

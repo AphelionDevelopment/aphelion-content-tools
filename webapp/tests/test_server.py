@@ -13,7 +13,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from tools.dmi import Dmi
-from tools.lore_editor.server import create_server
+from webapp.server import create_server
 from tools.lore_editor.app.manifest import ExportManifest, sha256_bytes
 from tools.lore_editor.export import PreparedExport
 
@@ -102,7 +102,7 @@ class StandaloneServerTests(unittest.TestCase):
 			try:
 				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/health") as response:
 					health_payload = json.loads(response.read())
-				self.assertEqual({"ok": True, "service": "lore-editor"}, health_payload)
+				self.assertEqual({"ok": True, "service": "aphelion-content-tools"}, health_payload)
 
 				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/catalog") as response:
 					catalog_payload = json.loads(response.read())
@@ -197,7 +197,7 @@ class StandaloneServerTests(unittest.TestCase):
 			thread = threading.Thread(target=server.serve_forever, daemon=True)
 			thread.start()
 			try:
-				with patch("tools.lore_editor.git_adapter.find_github_desktop_launcher", return_value=None):
+				with patch("webapp.git_adapter.find_github_desktop_launcher", return_value=None):
 					open_request = Request(
 						f"http://127.0.0.1:{server.server_address[1]}/api/git/open",
 						data=json.dumps({"repository": "tool"}).encode("utf-8"),
@@ -358,8 +358,8 @@ class StandaloneServerTests(unittest.TestCase):
 			thread.start()
 			try:
 				with patch("tools.lore_editor.export.apply_export", return_value=game_root / "artifact.dm"), patch(
-					"tools.lore_editor.git_adapter.find_github_desktop_launcher", return_value="github.bat",
-				), patch("tools.lore_editor.git_adapter.subprocess.Popen") as popen:
+					"webapp.git_adapter.find_github_desktop_launcher", return_value="github.bat",
+				), patch("webapp.git_adapter.subprocess.Popen") as popen:
 					apply_request = Request(
 						f"http://127.0.0.1:{server.server_address[1]}/api/export/apply",
 						data=json.dumps({"stage": "example"}).encode("utf-8"),

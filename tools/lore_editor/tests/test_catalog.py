@@ -212,27 +212,6 @@ class RefreshCatalogTests(unittest.TestCase):
 			with self.assertRaisesRegex(ValueError, "does not look like Meridian-Rift"):
 				catalog_module.refresh_catalog(tool_root, game_repo_root=game_root)
 
-	def test_validate_game_repository_accepts_checkout_with_matching_remote(self) -> None:
-		catalog_module, _source_module, _validation_module = self.import_modules()
-		with tempfile.TemporaryDirectory() as temp_dir:
-			game_root = Path(temp_dir)
-			(game_root / "tgstation.dme").write_text("", encoding="utf-8")
-			subprocess.run(["git", "-C", str(game_root), "init", "--initial-branch=main"], check=True, capture_output=True, text=True)
-			subprocess.run(
-				["git", "-C", str(game_root), "remote", "add", "origin", "https://example.invalid/Meridian-Rift.git"],
-				check=True, capture_output=True, text=True,
-			)
-
-			catalog_module.validate_game_repository(game_root)  # does not raise
-
-	def test_validate_game_repository_rejects_missing_directory(self) -> None:
-		catalog_module, _source_module, _validation_module = self.import_modules()
-		with tempfile.TemporaryDirectory() as temp_dir:
-			missing_root = Path(temp_dir) / "does-not-exist"
-
-			with self.assertRaisesRegex(ValueError, "does not exist"):
-				catalog_module.validate_game_repository(missing_root)
-
 	def test_refresh_catalog_rejects_targets_outside_configured_roots(self) -> None:
 		catalog_module, _source_module, _validation_module = self.import_modules()
 		with tempfile.TemporaryDirectory() as temp_dir:

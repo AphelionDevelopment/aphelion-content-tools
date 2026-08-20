@@ -1,19 +1,62 @@
 # Maintainer Guide
 
-This guide is for maintainers responsible for the catalog, the game-repository build integration, and
-the release/bootstrap path. Writer-facing workflow is covered in the
-[writer guide](writer-guide.md); architecture and implementation history are in
+This guide is for maintainers responsible for the catalog, the Content Graph, the game-repository
+build integration, and the release/bootstrap path. Writer-facing Lore Editor workflow is covered in
+the [writer guide](writer-guide.md); architecture and implementation history are in
 [architecture/](architecture/).
 
-## Architecture summary
+## Repository structure
 
-`aphelion-lore-tools` is the source of truth for catalog snapshots, writer groups, reviews,
-assignments, and per-record overrides. `Meridian-Rift` supplies BYOND/DMI assets for catalog
+`aphelion-content-tools` is a multi-tool suite, not a single app:
+
+- `webapp/` — the shared shell every tool runs inside: the local HTTP server (`server.py`,
+  `serve.py`), the generic Git adapter (`git_adapter.py`), the background job runner (`tooling.py`),
+  the game-checkout identity check (`game_repository.py`), generic manifest/JSON-storage primitives,
+  and the **Home page** (`web/index.html`, `app.js`, `styles.css`), served at `/` — repository status,
+  local Git actions, and the cross-tool "Cache and Storage Management" job list live here, not inside
+  any one tool.
+- `tools/lore_editor/` — the Lore Editor tool: its own domain logic, content, catalog snapshot, and its
+  own page (`tools/lore_editor/web/index.html`, `app.js`), served by the shared shell at `/lore-editor`.
+  Imports the shared pieces from `webapp/` rather than owning them.
+- `tools/content_graph/` — the Content Graph tool: scanner, marker parser, its own manifest shape, and
+  its own standalone page (`tools/content_graph/web/graph.html`), served by the shared shell at `/graph`
+  but with no JS/CSS dependency on any other tool's page.
+
+Each tool registers its own `ToolDefinition`s (see `tool_definitions.py` in each tool folder); the
+shell combines them into one background-job registry so Home's "Cache and Storage Management" panel and
+`/api/tools` list every tool's actions together, without either tool importing the other's code.
+
+## Architecture summary (Lore Editor)
+
+The `tools/lore_editor/content/` tree is the source of truth for catalog snapshots, writer groups,
+reviews, assignments, and per-record overrides. `Meridian-Rift` supplies BYOND/DMI assets for catalog
 generation and icon previews, and receives only the generated runtime artifact
 (`modular_aphelion/modules/lore_overhaul/code/generated_lore_overrides.dm`) through the staged export
 workflow — it never receives editor code or raw per-record content. Authentication, pushes, pull
 requests, and complex merge conflicts are handled in GitHub Desktop; this tool only does local status,
 branch, and commit operations.
+
+## Content Graph
+
+`tools/content_graph/scanner.py` walks a game checkout's `modular_nova/modules/*` and
+`modular_aphelion/modules/*` directories (module nodes), `modular_nova/master_files/**` and
+`modular_aphelion/master_files/**` (override nodes, mapped to their mirrored core path), and the
+`code/` tree for `NOVA EDIT`/`APHELION EDIT` marker comments (`tools/content_graph/markers.py`).
+
+The marker parser is deliberately tolerant: real markers in Meridian-Rift use `START` and `BEGIN`
+interchangeably, many are single-line with no block at all, and — per a real scan — **the large
+majority carry only a free-text reason, not a module id**. A marker only becomes a graph edge
+(module → core file) when its label resolves to a real module directory; everything else lands in the
+`unresolved_markers` list instead of being silently dropped or mis-attributed. Don't expect the graph's
+edge count to reflect the true edit count — check `manifest.marker_count` vs. the graph's edge count
+for the gap, and use the Unresolved markers panel to see the rest.
+
+Scanning is explicit and cached, not automatic: use the **Scan modular content** tool button (or
+`python tools/content_graph/cli.py scan --repo-root . --game-repo <path>`), which validates the
+checkout identity the same way the Lore Editor does (`webapp/game_repository.py`), then writes
+`tools/content_graph/cache/index.json` and `manifest.json` (gitignored — regenerate rather than commit
+them). A real scan of Meridian-Rift takes a few seconds. The graph page reads the cache; it never scans
+on page load.
 
 ## Refreshing the catalog
 
@@ -50,7 +93,7 @@ directly.
 
 ## Git operation safety
 
-`git_adapter.py` serializes every multi-step operation (`repository_status`, `create_branch`,
+`webapp/git_adapter.py` — shared by every tool — serializes every multi-step operation (`repository_status`, `create_branch`,
 `stage_and_commit`) with a per-repository-path lock, so two concurrent requests against the same
 checkout (e.g. two browser tabs) can't interleave their Git index changes — different repositories are
 never blocked on each other. Output is also bounded: Git error messages are truncated past 8,000
@@ -135,7 +178,7 @@ be committed (`tgstation.dmb` and `data/**/*` are already gitignored).
 
 ## Release and bootstrap path
 
-[`Launch Lore Tools.cmd`](../Launch%20Lore%20Tools.cmd) calls
+[`Launch Aphelion Content Tools.cmd`](../Launch%20Aphelion%20Content%20Tools.cmd) calls
 [`tools/launcher/launch.ps1`](../tools/launcher/launch.ps1), which:
 
 1. Looks for a compatible Python (3.11+, with Pillow) via `python.exe`, `py -3`, or a previously
@@ -143,11 +186,11 @@ be committed (`tgstation.dmb` and `data/**/*` are already gitignored).
 2. If none is found, asks before downloading the pinned installer named in
    [`tools/launcher/runtime_manifest.json`](../tools/launcher/runtime_manifest.json), verifies its
    Authenticode signature is a valid Python Software Foundation signature before running it, and
-   installs it per-user into `%LOCALAPPDATA%\AphelionLoreTools\runtime` (no PATH changes, no
+   installs it per-user into `%LOCALAPPDATA%\AphelionContentTools\runtime` (no PATH changes, no
    all-users install). Declining leaves manual-install instructions on screen and changes nothing.
-3. Resolves the game-checkout path (from `%LOCALAPPDATA%\AphelionLoreTools\settings.json`, a nearby
+3. Resolves the game-checkout path (from `%LOCALAPPDATA%\AphelionContentTools\settings.json`, a nearby
    `Meridian-Rift` folder, or a manual prompt) and persists it for next time.
-4. Starts `tools/lore_editor/serve.py` on a loopback port and opens the browser to it.
+4. Starts `webapp/serve.py` on a loopback port and opens the browser to it.
 
 To change the pinned Python version, edit `runtime_manifest.json`'s `version`, `installer_url`, and
 `signature_subject_contains` fields together — an installer whose signature doesn't match the expected
@@ -157,7 +200,10 @@ subject is rejected outright, so all three must stay consistent.
 
 ```powershell
 python -m unittest discover -s tools/lore_editor/tests -p 'test_*.py'
-node --check tools/lore_editor/web/app.js
+python -m unittest discover -s webapp/tests -p 'test_*.py'
+python -m unittest discover -s tools/content_graph/tests -p 'test_*.py'
+node --check webapp/web/app.js
+node --check tools/content_graph/web/graph.js
 python tools/lore_editor/cli.py generate --repo-root .
 python tools/lore_editor/cli.py validate --repo-root . --check-generated
 git diff --check

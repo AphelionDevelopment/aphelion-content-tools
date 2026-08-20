@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $resolvedRepositoryRoot = (Resolve-Path -LiteralPath $RepositoryRoot).Path
-$localRoot = Join-Path $env:LOCALAPPDATA "AphelionLoreTools"
+$localRoot = Join-Path $env:LOCALAPPDATA "AphelionContentTools"
 $runtimeRoot = Join-Path $localRoot "runtime"
 $settingsPath = Join-Path $localRoot "settings.json"
 $requirementsPath = Join-Path $resolvedRepositoryRoot "tools\lore_editor\requirements.txt"
@@ -52,10 +52,10 @@ function Find-CompatiblePython {
 
 function Show-RequirementsGuidance {
 	Write-Host ""
-	Write-Host "Lore Tools needs 64-bit Python 3.11 or newer with Pillow installed." -ForegroundColor Yellow
+	Write-Host "Aphelion Content Tools needs 64-bit Python 3.11 or newer with Pillow installed." -ForegroundColor Yellow
 	Write-Host "Install Python from https://www.python.org/downloads/windows/ and then run:" -ForegroundColor Yellow
 	Write-Host "  python -m pip install -r tools\lore_editor\requirements.txt" -ForegroundColor Yellow
-	Write-Host "Then double-click Launch Lore Tools.cmd again." -ForegroundColor Yellow
+	Write-Host "Then double-click Launch Aphelion Content Tools.cmd again." -ForegroundColor Yellow
 }
 
 function Install-PrivatePython {
@@ -87,7 +87,7 @@ function Install-PrivatePython {
 	$pythonPath = Join-Path $installPath "python.exe"
 	if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) { throw "Python installation completed without creating python.exe." }
 	& $pythonPath -m pip install --disable-pip-version-check --no-input -r $requirementsPath
-	if ($LASTEXITCODE -ne 0) { throw "Installing the Lore Tools Python dependency failed." }
+	if ($LASTEXITCODE -ne 0) { throw "Installing the Aphelion Content Tools Python dependency failed." }
 	return $pythonPath
 }
 
@@ -167,7 +167,7 @@ if ($gameRoot) {
 	@{ gameRepository = $gameRoot } | ConvertTo-Json | Set-Content -LiteralPath $settingsPath -Encoding UTF8
 }
 $arguments = @(
-	(Join-Path $resolvedRepositoryRoot "tools\lore_editor\serve.py"),
+	(Join-Path $resolvedRepositoryRoot "webapp\serve.py"),
 	"--repo-root", $resolvedRepositoryRoot,
 	"--port", "0"
 )
@@ -194,10 +194,10 @@ while (-not $server.HasExited -and -not $url) {
 }
 if (-not $url) {
 	$errorOutput = $server.StandardError.ReadToEnd()
-	throw "Lore Tools could not start its local server. $errorOutput"
+	throw "Aphelion Content Tools could not start its local server. $errorOutput"
 }
 Start-Process $url
-Write-Host "Lore Tools is running at $url. Close this window to stop it."
+Write-Host "Aphelion Content Tools is running at $url. Close this window to stop it."
 while (-not $server.HasExited) {
 	if (-not $server.StandardOutput.EndOfStream) { Write-Host $server.StandardOutput.ReadLine() }
 	else { Start-Sleep -Milliseconds 250 }

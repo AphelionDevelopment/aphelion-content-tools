@@ -14,16 +14,15 @@ from pathlib import Path
 from .model import SUPPORTED_ICON_KEYS
 from .app.manifest import CatalogManifest, sha256_bytes
 from .app.storage import canonical_json_bytes
-from .git_adapter import repository_remote_url, repository_revision
 from .source import TARGETS_PATH, read_json_file, resolve_repo_path
 from .validation import TYPE_PATH_PATTERN
 from .workspace import WorkspaceLayout
+from webapp.game_repository import validate_game_repository
+from webapp.git_adapter import repository_revision
 
 PROBE_OUTPUT_PATH = Path("data/lore_overhaul_targets.json")
 BUILD_ENTRYPOINT = Path("tools/build/build.bat")
 COMPILED_DMB_PATH = Path("tgstation.dmb")
-GAME_REPOSITORY_MARKER_PATH = Path("tgstation.dme")
-EXPECTED_GAME_REPOSITORY_REMOTE_HINT = "meridian-rift"
 FIELD_PROFILE_ATOM_LIKE = "atom_like"
 FIELD_PROFILE_NAMED_DATUM = "named_datum"
 SUPPORTED_FIELD_PROFILES = frozenset((FIELD_PROFILE_ATOM_LIKE, FIELD_PROFILE_NAMED_DATUM))
@@ -335,29 +334,6 @@ def _run_catalog_probe(repo_root: Path) -> Path:
 	if not probe_output_path.exists():
 		raise ValueError(f"Lore catalog probe did not produce {PROBE_OUTPUT_PATH.as_posix()}.")
 	return probe_output_path
-
-
-def validate_game_repository(game_repo_root: Path) -> None:
-	"""Raise if the given path does not look like a Meridian-Rift checkout.
-
-	Checks a content marker (tgstation.dme) that any BYOND/tgstation-family checkout must have, and,
-	when the path is a Git repository with an 'origin' remote configured, that the remote URL looks
-	like Meridian-Rift. A path with no Git remote configured is accepted based on the content marker
-	alone, since there is nothing further to check.
-	"""
-	resolved_root = game_repo_root.resolve()
-	if not resolved_root.is_dir():
-		raise ValueError(f"Game repository does not exist: {game_repo_root}")
-	if not (resolved_root / GAME_REPOSITORY_MARKER_PATH).is_file():
-		raise ValueError(
-			f"'{resolved_root}' does not look like a Meridian-Rift checkout "
-			f"({GAME_REPOSITORY_MARKER_PATH.as_posix()} is missing)."
-		)
-	remote_url = repository_remote_url(resolved_root)
-	if remote_url is not None and EXPECTED_GAME_REPOSITORY_REMOTE_HINT not in remote_url.casefold():
-		raise ValueError(
-			f"'{resolved_root}' has a Git remote that does not look like Meridian-Rift: {remote_url}"
-		)
 
 
 def read_current_targets(repo_root: Path) -> list[dict[str, object]]:

@@ -8,14 +8,12 @@ WEB_ROOT = Path(__file__).resolve().parents[1] / "web"
 
 
 class WebLaunchTests(unittest.TestCase):
-	def test_editor_assets_are_relative_to_the_page(self) -> None:
+	def test_editor_assets_are_served_from_absolute_paths(self) -> None:
 		html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
 
-		self.assertIn('href="styles.css"', html)
-		self.assertIn('href="favicon.svg"', html)
-		self.assertIn('src="app.js"', html)
-		self.assertNotIn('href="/styles.css"', html)
-		self.assertNotIn('src="/app.js"', html)
+		self.assertIn('href="/styles.css"', html)
+		self.assertIn('href="/favicon.svg"', html)
+		self.assertIn('src="/lore-editor.js"', html)
 
 	def test_file_launch_explains_that_the_server_is_required(self) -> None:
 		javascript = (WEB_ROOT / "app.js").read_text(encoding="utf-8")
@@ -60,8 +58,6 @@ class WebLaunchTests(unittest.TestCase):
 			"icon-file-input",
 			"icon-base-preview",
 			"icon-override-preview",
-			"tool-list",
-			"tool-log-path",
 		):
 			self.assertIn(f'id="{element_id}"', html)
 		self.assertIn("URLSearchParams", javascript)
@@ -77,7 +73,6 @@ class WebLaunchTests(unittest.TestCase):
 		self.assertIn("has_more", javascript)
 		self.assertIn("load-more", javascript)
 		self.assertIn("iconStates.has", javascript)
-		self.assertIn("log_path", javascript)
 		self.assertIn("special_desc_requirement", javascript)
 		self.assertIn("special_desc", javascript)
 

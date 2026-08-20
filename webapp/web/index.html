@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aphelion Content Tools</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">Aphelion Content Tools</p>
+      <h1>Home</h1>
+      <p>Repository status, local Git actions, and cache/storage management shared across every tool.</p>
+    </header>
+
+    <nav class="tool-nav" aria-label="Tools">
+      <span class="tool-pill tool-pill-home active" aria-current="page">Home</span>
+      <a class="tool-pill" href="/lore-editor">Lore Editor</a>
+      <a class="tool-pill" href="/graph">Content Graph</a>
+    </nav>
+
+    <section class="card repository-card" aria-label="Repository workflow">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Local Git workflow</p>
+          <h2>Repositories</h2>
+          <p class="metadata">The app can make local commits and open GitHub Desktop. Pushes, pull requests, and complex merges stay in GitHub Desktop.</p>
+        </div>
+        <button id="refresh-repository-status" class="secondary-button" type="button">Refresh status</button>
+      </div>
+      <div id="repository-status-list" class="repository-status-list"></div>
+      <div class="workflow-controls">
+        <label for="git-repository">Repository</label>
+        <select id="git-repository">
+          <option value="tool">Lore tools</option>
+          <option value="game">Meridian-Rift</option>
+        </select>
+        <label for="git-branch-name">New local branch</label>
+        <input id="git-branch-name" type="text" placeholder="lore/company-review">
+        <button id="create-branch-button" type="button">Create branch</button>
+        <label for="git-commit-message">Commit message</label>
+        <input id="git-commit-message" type="text" placeholder="Update lore review decisions">
+        <button id="commit-repository-button" type="button">Commit changed files</button>
+        <button id="open-github-desktop-button" class="secondary-button" type="button">Open in GitHub Desktop</button>
+      </div>
+      <p id="repository-message" class="metadata" aria-live="polite"></p>
+    </section>
+
+    <section class="card tools-card" aria-label="Cache and storage management">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Repository operations</p>
+          <h2>Cache and Storage Management</h2>
+          <p class="metadata">Run the supported catalog, validation, generation, and content-graph scan jobs without leaving this page.</p>
+        </div>
+      </div>
+      <div id="tool-list" class="tool-list"></div>
+      <pre id="tool-output" class="tool-output" aria-live="polite"></pre>
+      <p id="tool-log-path" class="metadata"></p>
+    </section>
+
+    <section class="card export-card" aria-label="Game-repository export">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Repository operations</p>
+          <h2>Game-repository export</h2>
+          <p class="metadata">Prepare outside the game checkout, then apply only to a clean checkout after reviewing the manifest.</p>
+        </div>
+        <button id="prepare-export-button" type="button">Prepare export</button>
+      </div>
+      <label for="export-stage-select">Prepared stage</label>
+      <select id="export-stage-select"><option value="">No prepared stages</option></select>
+      <button id="apply-export-button" class="secondary-button" type="button">Apply selected export</button>
+      <pre id="export-output" class="tool-output" aria-live="polite"></pre>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
