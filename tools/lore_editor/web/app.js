@@ -1,3 +1,6 @@
+(() => {
+  'use strict';
+
 const STATUS_LABELS = {
   unreviewed: 'Unreviewed',
   reviewed: 'Reviewed',
@@ -820,3 +823,5 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {state, statusLabel, groupMatchSummary, slugify, iconRecord, isIconStateAvailable, reviewQueryUrl};
 }
+
+})();

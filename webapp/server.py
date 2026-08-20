@@ -212,6 +212,9 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 		if parsed.path == "/app.js":
 			self.serve_static("app.js", "text/javascript; charset=utf-8")
 			return
+		if parsed.path == "/shell.js":
+			self.serve_static("shell.js", "text/javascript; charset=utf-8")
+			return
 		if parsed.path == "/styles.css":
 			self.serve_static("styles.css", "text/css; charset=utf-8")
 			return

@@ -1131,11 +1131,52 @@
     }
   }
 
+  let statsIntervalHandle = null;
+
+  function startStatsInterval() {
+    if (statsIntervalHandle !== null) return;
+    statsIntervalHandle = window.setInterval(renderPhysicsStats, 500);
+  }
+
+  function stopStatsInterval() {
+    if (statsIntervalHandle !== null) {
+      window.clearInterval(statsIntervalHandle);
+      statsIntervalHandle = null;
+    }
+  }
+
+  function pauseView() {
+    if (state.simFrameHandle !== null) {
+      window.cancelAnimationFrame(state.simFrameHandle);
+      state.simFrameHandle = null;
+    }
+    stopDragPhysics();
+    stopStatsInterval();
+  }
+
+  function resumeView() {
+    resizeCanvas();
+    draw();
+    startStatsInterval();
+    if (state.nodes.length && state.simFrameHandle === null) {
+      state.simulationDone = false;
+      runSimulation(state.nodes, state.edges, () => applyFilters());
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('aphelion:tool-visibility', (event) => {
+      if (!event.detail || event.detail.tool !== 'graph') return;
+      if (event.detail.visible) resumeView();
+      else pauseView();
+    });
+  }
+
   function init() {
     resizeCanvas();
     attachInteractions();
     attachStaticEvents();
-    window.setInterval(renderPhysicsStats, 500);
+    startStatsInterval();
     loadGraph().catch((error) => setStatus(error.message));
   }
 

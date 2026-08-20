@@ -1,3 +1,6 @@
+(() => {
+  'use strict';
+
 const state = {
   repositories: {tool: null, game: null},
   exportStages: [],
@@ -247,6 +250,15 @@ if (typeof document !== 'undefined') {
   initializeHome();
 }
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('aphelion:tool-visibility', (event) => {
+    if (!event.detail || event.detail.tool !== 'home' || !event.detail.visible) return;
+    loadRepositoryStatus().catch((error) => setText('#repository-message', error.message));
+  });
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {repositoryLabel};
 }
+
+})();
