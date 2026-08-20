@@ -214,4 +214,10 @@ function initializeHome() {
   loadHomeData().catch((error) => setText('#repository-message', error.message));
 }
 
-initializeHome();
+if (typeof document !== 'undefined') {
+  initializeHome();
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {repositoryLabel};
+}

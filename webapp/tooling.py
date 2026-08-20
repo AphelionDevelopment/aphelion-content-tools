@@ -10,6 +10,7 @@ from pathlib import Path
 
 MAX_OUTPUT_CHARACTERS = 64_000
 MAX_LOG_CHARACTERS = 1_000_000
+MAX_RETAINED_RUNS = 200
 LOG_ROOT = Path("tools/logs")
 
 
@@ -144,6 +145,7 @@ def start_tool(
 			"exit_code": None,
 			"log_path": log_path.as_posix(),
 		}
+		_evict_old_runs_locked()
 	_append_log(repo_root.resolve(), run_id, f"Queued {tool_id}.\n")
 	thread = threading.Thread(
 		target=_execute_tool,
@@ -152,6 +154,19 @@ def start_tool(
 	)
 	thread.start()
 	return get_tool_run(run_id)
+
+
+def _evict_old_runs_locked() -> None:
+	"""Drop the oldest finished runs once the retained-run count exceeds MAX_RETAINED_RUNS.
+
+	Must be called while holding _RUNS_LOCK. Queued/running runs are never evicted.
+	"""
+	if len(_RUNS) <= MAX_RETAINED_RUNS:
+		return
+	finished_ids = [run_id for run_id, run in _RUNS.items() if run["status"] in ("succeeded", "failed")]
+	excess = len(_RUNS) - MAX_RETAINED_RUNS
+	for run_id in finished_ids[:excess]:
+		del _RUNS[run_id]
 
 
 def get_tool_run(run_id: str) -> dict[str, object]:

@@ -26,6 +26,13 @@ Each tool registers its own `ToolDefinition`s (see `tool_definitions.py` in each
 shell combines them into one background-job registry so Home's "Cache and Storage Management" panel and
 `/api/tools` list every tool's actions together, without either tool importing the other's code.
 
+Each page's `.js` file is a plain script (no bundler, no `<script type="module">`), but ends with a
+guarded block —`if (typeof module !== 'undefined' && module.exports) { module.exports = {...}; }`— that
+exports its pure, DOM-free functions for testing. This only activates under Node's CommonJS `require()`;
+browsers never see it. The matching top-level browser-only calls (element lookups, the auto-init call)
+are guarded the same way (`typeof document !== 'undefined'`) so `require()`-ing the file under Node
+doesn't throw. See `web/tests/*.test.js` next to each page's script, run via `node --test`.
+
 ## Architecture summary (Lore Editor)
 
 The `tools/lore_editor/content/` tree is the source of truth for catalog snapshots, writer groups,
@@ -81,7 +88,8 @@ Two safeguards apply whenever `--game-repo` is passed (to `catalog-refresh`, and
   after the refresh: type paths **removed** from the game repository, type paths that **changed**
   (label, field profile, editable root, parent type, or base name/description), and which existing
   overrides now reference a removed-or-changed target ("stale" overrides worth reviewing). This
-  reaches the Tools panel's run log automatically, since it's just CLI stdout.
+  reaches the Home page's Cache and Storage Management run log automatically, since it's just CLI
+  stdout.
 
 ## Group and review oversight
 
@@ -203,7 +211,9 @@ python -m unittest discover -s tools/lore_editor/tests -p 'test_*.py'
 python -m unittest discover -s webapp/tests -p 'test_*.py'
 python -m unittest discover -s tools/content_graph/tests -p 'test_*.py'
 node --check webapp/web/app.js
+node --check tools/lore_editor/web/app.js
 node --check tools/content_graph/web/graph.js
+node --test webapp/web/tests/app.test.js tools/lore_editor/web/tests/app.test.js tools/content_graph/web/tests/graph.test.js
 python tools/lore_editor/cli.py generate --repo-root .
 python tools/lore_editor/cli.py validate --repo-root . --check-generated
 git diff --check

@@ -29,7 +29,25 @@ def _load_api_functions():
 	from tools.lore_editor.api import create_entry, list_entity_files, save_group_response, save_review_response
 	from tools.lore_editor.api import save_entry, validate_entries, validate_entry
 	from tools.lore_editor.icon_preview import IconPreviewNotFound, render_icon_preview
-	return catalog_response, generate_output, list_entries_response, list_icon_choices, save_entry, validate_entries, validate_entry, IconPreviewNotFound, render_icon_preview, list_review_response, groups_response, save_group_response, save_review_response, create_entry, list_entity_files, icon_files_response, icon_states_response
+	return {
+		"catalog_response": catalog_response,
+		"generate_output": generate_output,
+		"list_entries_response": list_entries_response,
+		"list_icon_choices": list_icon_choices,
+		"save_entry": save_entry,
+		"validate_entries": validate_entries,
+		"validate_entry": validate_entry,
+		"IconPreviewNotFound": IconPreviewNotFound,
+		"render_icon_preview": render_icon_preview,
+		"list_review_response": list_review_response,
+		"groups_response": groups_response,
+		"save_group_response": save_group_response,
+		"save_review_response": save_review_response,
+		"create_entry": create_entry,
+		"list_entity_files": list_entity_files,
+		"icon_files_response": icon_files_response,
+		"icon_states_response": icon_states_response,
+	}
 
 
 def _load_git_functions():
@@ -37,7 +55,12 @@ def _load_git_functions():
 		from webapp.git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
 	else:
 		from .git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
-	return create_branch, repository_status, stage_and_commit, open_in_github_desktop
+	return {
+		"create_branch": create_branch,
+		"repository_status": repository_status,
+		"stage_and_commit": stage_and_commit,
+		"open_in_github_desktop": open_in_github_desktop,
+	}
 
 
 def _load_tooling_functions():
@@ -45,7 +68,7 @@ def _load_tooling_functions():
 		from webapp.tooling import get_tool_run, list_tools, start_tool
 	else:
 		from .tooling import get_tool_run, list_tools, start_tool
-	return list_tools, start_tool, get_tool_run
+	return {"list_tools": list_tools, "start_tool": start_tool, "get_tool_run": get_tool_run}
 
 
 def _load_tool_registry():
@@ -56,17 +79,21 @@ def _load_tool_registry():
 
 def _load_export_functions():
 	from tools.lore_editor.export import apply_export, prepare_export
-	return prepare_export, apply_export
+	return {"prepare_export": prepare_export, "apply_export": apply_export}
 
 
 def _load_graph_functions():
 	from tools.content_graph.graph import read_graph_cache
-	return (read_graph_cache,)
+	return {"read_graph_cache": read_graph_cache}
 
 
 def _load_graph_query_functions():
 	from tools.content_graph.queries import edits_for_core_file, modules_missing_readme, unresolved_markers
-	return edits_for_core_file, modules_missing_readme, unresolved_markers
+	return {
+		"edits_for_core_file": edits_for_core_file,
+		"modules_missing_readme": modules_missing_readme,
+		"unresolved_markers": unresolved_markers,
+	}
 
 
 class WebAppServer(ThreadingHTTPServer):
@@ -183,7 +210,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			try:
 				query = parse_qs(parsed.query)
 				repository_name = query.get("repository", ["tool"])[0]
-				_repository_status = _load_git_functions()[1]
+				_repository_status = _load_git_functions()["repository_status"]
 				status = _repository_status(self.repository_root(repository_name))
 				self.send_json(asdict(status) | {"conflicted": status.conflicted})
 			except (OSError, ValueError) as exc:
@@ -206,14 +233,14 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/catalog":
 			try:
-				catalog_response = _load_api_functions()[0]
+				catalog_response = _load_api_functions()["catalog_response"]
 				self.send_json(catalog_response(self.server.repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
 		if parsed.path == "/api/graph":
 			try:
-				read_graph_cache = _load_graph_functions()[0]
+				read_graph_cache = _load_graph_functions()["read_graph_cache"]
 				cached = read_graph_cache(self.server.repo_root)
 				if cached is None:
 					self.send_json({"scanned": False, "graph": None, "manifest": None})
@@ -225,7 +252,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/graph/status":
 			try:
-				read_graph_cache = _load_graph_functions()[0]
+				read_graph_cache = _load_graph_functions()["read_graph_cache"]
 				cached = read_graph_cache(self.server.repo_root)
 				if cached is None:
 					self.send_json({"scanned": False, "manifest": None})
@@ -237,8 +264,8 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/graph/edits":
 			try:
-				read_graph_cache = _load_graph_functions()[0]
-				edits_for_core_file = _load_graph_query_functions()[0]
+				read_graph_cache = _load_graph_functions()["read_graph_cache"]
+				edits_for_core_file = _load_graph_query_functions()["edits_for_core_file"]
 				cached = read_graph_cache(self.server.repo_root)
 				if cached is None:
 					self.send_json({"scanned": False, "edits": []})
@@ -255,8 +282,8 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/graph/modules":
 			try:
-				read_graph_cache = _load_graph_functions()[0]
-				modules_missing_readme = _load_graph_query_functions()[1]
+				read_graph_cache = _load_graph_functions()["read_graph_cache"]
+				modules_missing_readme = _load_graph_query_functions()["modules_missing_readme"]
 				cached = read_graph_cache(self.server.repo_root)
 				if cached is None:
 					self.send_json({"scanned": False, "modules": []})
@@ -273,8 +300,8 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/graph/unresolved":
 			try:
-				read_graph_cache = _load_graph_functions()[0]
-				unresolved_markers = _load_graph_query_functions()[2]
+				read_graph_cache = _load_graph_functions()["read_graph_cache"]
+				unresolved_markers = _load_graph_query_functions()["unresolved_markers"]
 				cached = read_graph_cache(self.server.repo_root)
 				if cached is None:
 					self.send_json({"scanned": False, "unresolved_markers": []})
@@ -286,7 +313,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/entries":
 			try:
-				list_entries_response = _load_api_functions()[2]
+				list_entries_response = _load_api_functions()["list_entries_response"]
 				query = parse_qs(parsed.query)
 				self.send_json(
 					list_entries_response(
@@ -301,7 +328,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/review":
 			try:
-				list_review_response = _load_api_functions()[9]
+				list_review_response = _load_api_functions()["list_review_response"]
 				query = parse_qs(parsed.query)
 				self.send_json(
 					list_review_response(
@@ -323,28 +350,28 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/groups":
 			try:
-				groups_response = _load_api_functions()[10]
+				groups_response = _load_api_functions()["groups_response"]
 				self.send_json(groups_response(self.server.repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
 		if parsed.path == "/api/entity-files":
 			try:
-				list_entity_files = _load_api_functions()[14]
+				list_entity_files = _load_api_functions()["list_entity_files"]
 				self.send_json({"files": list_entity_files(self.server.repo_root)})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
 		if parsed.path == "/api/tools":
 			try:
-				list_tools = _load_tooling_functions()[0]
+				list_tools = _load_tooling_functions()["list_tools"]
 				self.send_json({"tools": list_tools(_load_tool_registry())})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
 		if parsed.path == "/api/icon-files":
 			try:
-				icon_files_response = _load_api_functions()[15]
+				icon_files_response = _load_api_functions()["icon_files_response"]
 				self.send_json(icon_files_response(self.server.repo_root, asset_root=self.server.game_repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -352,14 +379,14 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 		tool_run_prefix = "/api/tools/runs/"
 		if parsed.path.startswith(tool_run_prefix):
 			try:
-				get_tool_run = _load_tooling_functions()[2]
+				get_tool_run = _load_tooling_functions()["get_tool_run"]
 				self.send_json(get_tool_run(unquote(parsed.path[len(tool_run_prefix):])))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
 		if parsed.path == "/api/icons":
 			try:
-				list_icon_choices = _load_api_functions()[3]
+				list_icon_choices = _load_api_functions()["list_icon_choices"]
 				self.send_json({"icons": list_icon_choices(self.server.repo_root, asset_root=self.server.game_repo_root)})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -370,7 +397,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				relative_file = query.get("file", [""])[0]
 				if not relative_file:
 					raise ValueError("Icon state lookup requires a file query parameter.")
-				icon_states_response = _load_api_functions()[16]
+				icon_states_response = _load_api_functions()["icon_states_response"]
 				self.send_json(icon_states_response(self.server.repo_root, relative_file, asset_root=self.server.game_repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -382,12 +409,12 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				state = _query.get("state", [""])[0]
 				if not relative_file or not state:
 					raise ValueError("Icon preview requires file and state query parameters.")
-				_render_icon_preview = _load_api_functions()[8]
+				_render_icon_preview = _load_api_functions()["render_icon_preview"]
 				self.send_bytes(
 					_render_icon_preview(self.server.game_repo_root, relative_file, state),
 					"image/png",
 				)
-			except _load_api_functions()[7] as exc:
+			except _load_api_functions()["IconPreviewNotFound"] as exc:
 				self.send_error_json(HTTPStatus.NOT_FOUND, str(exc))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -402,7 +429,9 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 					payload = self.read_json_body()
 					if not isinstance(payload, dict):
 						raise ValueError("Export preparation request must be a JSON object.")
-				_prepare_export, _apply_export = _load_export_functions()
+				_export_functions = _load_export_functions()
+				_prepare_export = _export_functions["prepare_export"]
+				_apply_export = _export_functions["apply_export"]
 				prepared = _prepare_export(
 					self.server.repo_root,
 					self.server.game_repo_root,
@@ -423,7 +452,9 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				payload = self.read_json_body()
 				if not isinstance(payload, dict) or not isinstance(payload.get("stage"), str):
 					raise ValueError("Export application requires a string stage.")
-				_prepare_export, _apply_export = _load_export_functions()
+				_export_functions = _load_export_functions()
+				_prepare_export = _export_functions["prepare_export"]
+				_apply_export = _export_functions["apply_export"]
 				artifact_path = _apply_export(
 					self.export_stage_path(payload["stage"]),
 					self.server.game_repo_root,
@@ -431,7 +462,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				opened_in_github_desktop = False
 				github_desktop_error = None
 				try:
-					_open_desktop = _load_git_functions()[3]
+					_open_desktop = _load_git_functions()["open_in_github_desktop"]
 					_open_desktop(self.server.game_repo_root)
 					opened_in_github_desktop = True
 				except (OSError, ValueError) as desktop_exc:
@@ -453,7 +484,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				repository_name = payload.get("repository", "tool")
 				if not isinstance(repository_name, str):
 					raise ValueError("Branch request repository must be a string.")
-				_create_branch = _load_git_functions()[0]
+				_create_branch = _load_git_functions()["create_branch"]
 				_create_branch(self.repository_root(repository_name), payload["name"])
 				self.send_json({"repository": repository_name, "branch": payload["name"]})
 			except (OSError, ValueError) as exc:
@@ -470,7 +501,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				repository_name = payload.get("repository", "tool")
 				if not isinstance(repository_name, str):
 					raise ValueError("Commit request repository must be a string.")
-				_commit = _load_git_functions()[2]
+				_commit = _load_git_functions()["stage_and_commit"]
 				commit_sha = _commit(self.repository_root(repository_name), tuple(paths), payload["message"])
 				self.send_json({"repository": repository_name, "commit": commit_sha})
 			except (OSError, ValueError) as exc:
@@ -482,7 +513,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				repository_name = payload.get("repository", "tool") if isinstance(payload, dict) else "tool"
 				if not isinstance(repository_name, str):
 					raise ValueError("Open request repository must be a string.")
-				_open_desktop = _load_git_functions()[3]
+				_open_desktop = _load_git_functions()["open_in_github_desktop"]
 				_open_desktop(self.repository_root(repository_name))
 				self.send_json({"repository": repository_name, "opened": True})
 			except (OSError, ValueError) as exc:
@@ -490,7 +521,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/api/generate":
 			try:
-				generate_output = _load_api_functions()[1]
+				generate_output = _load_api_functions()["generate_output"]
 				self.send_json(generate_output(self.server.repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -498,7 +529,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 		if parsed.path == "/api/groups":
 			try:
 				payload = self.read_json_body()
-				save_group_response = _load_api_functions()[11]
+				save_group_response = _load_api_functions()["save_group_response"]
 				self.send_json(save_group_response(self.server.repo_root, payload))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -508,7 +539,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				payload = self.read_json_body()
 				if not isinstance(payload, dict) or not isinstance(payload.get("source_file"), str):
 					raise ValueError("Create request must contain a string source_file.")
-				create_entry = _load_api_functions()[13]
+				create_entry = _load_api_functions()["create_entry"]
 				created_entry = create_entry(
 					self.server.repo_root,
 					source_file=payload["source_file"],
@@ -526,7 +557,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				self.send_error_json(HTTPStatus.NOT_FOUND, "Tool runs are read-only.")
 				return
 			try:
-				start_tool = _load_tooling_functions()[1]
+				start_tool = _load_tooling_functions()["start_tool"]
 				self.send_json(start_tool(self.server.repo_root, _load_tool_registry(), tool_id, game_repo_root=self.server.game_repo_root))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -545,12 +576,12 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				entries = payload.get("entries")
 				if not isinstance(entries, list):
 					raise ValueError("Request entries must be a JSON array.")
-				validate_entries = _load_api_functions()[5]
+				validate_entries = _load_api_functions()["validate_entries"]
 				self.send_json(validate_entries(self.server.repo_root, entries=entries, source_file=source_file, asset_root=self.server.game_repo_root))
 			else:
 				if not isinstance(source_file, str):
 					raise ValueError("Request must contain a string source_file.")
-				validate_entry = _load_api_functions()[6]
+				validate_entry = _load_api_functions()["validate_entry"]
 				self.send_json(validate_entry(self.server.repo_root, source_file=source_file, entry=payload.get("entry"), asset_root=self.server.game_repo_root))
 		except (OSError, ValueError) as exc:
 			self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -562,7 +593,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			type_path = unquote(parsed.path[len(review_prefix):])
 			try:
 				payload = self.read_json_body()
-				save_review_response = _load_api_functions()[12]
+				save_review_response = _load_api_functions()["save_review_response"]
 				self.send_json(save_review_response(self.server.repo_root, type_path, payload))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -575,7 +606,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				if not isinstance(payload, dict):
 					raise ValueError("Group payload must be a JSON object.")
 				payload["id"] = group_id
-				save_group_response = _load_api_functions()[11]
+				save_group_response = _load_api_functions()["save_group_response"]
 				self.send_json(save_group_response(self.server.repo_root, payload))
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -595,7 +626,7 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			source_file = payload.get("source_file")
 			if not isinstance(source_file, str):
 				raise ValueError("Request must contain a string source_file.")
-			save_entry = _load_api_functions()[4]
+			save_entry = _load_api_functions()["save_entry"]
 			saved_entry = save_entry(
 				self.server.repo_root,
 				entry_id=entry_id,

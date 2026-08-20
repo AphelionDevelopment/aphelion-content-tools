@@ -67,8 +67,8 @@
     perf: {frameMs: 0},
   };
 
-  const canvas = document.getElementById('graph-canvas');
-  const ctx = canvas.getContext('2d');
+  const canvas = typeof document !== 'undefined' ? document.getElementById('graph-canvas') : null;
+  const ctx = canvas ? canvas.getContext('2d') : null;
 
   async function requestJson(path, options = {}) {
     const response = await fetch(path, options);
@@ -288,7 +288,10 @@
     const nodes = state.nodes;
     const edges = state.edges;
     let steps = 0;
-    function frame() {
+    let lastTimestamp = null;
+    function frame(timestamp) {
+      if (lastTimestamp !== null) state.perf.frameMs = timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
       for (let i = 0; i < ITERATIONS_PER_FRAME && steps < NUDGE_STEPS; i++, steps++) {
         simulationStep(nodes, edges, 0.2);
       }
@@ -297,6 +300,7 @@
         state.simFrameHandle = window.requestAnimationFrame(frame);
       } else {
         state.simFrameHandle = null;
+        state.perf.frameMs = 0;
         renderPhysicsStats();
       }
     }
@@ -857,6 +861,10 @@
       return;
     }
     const payload = await requestJson('/api/graph/edits?core_file=' + encodeURIComponent(coreFile));
+    if (!payload.scanned) {
+      renderDebugResults([], 'No content graph has been scanned yet.', () => '');
+      return;
+    }
     renderDebugResults(payload.edits, 'No edits found for that core file.', (edit) => (
       '<div class="unresolved-item">' +
       '<div class="path">' + escapeHtml(edit.owner) + ' ' + escapeHtml(edit.edit_type) +
@@ -869,6 +877,10 @@
 
   async function runMissingReadmeLookup() {
     const payload = await requestJson('/api/graph/modules?missing_readme=true');
+    if (!payload.scanned) {
+      renderDebugResults([], 'No content graph has been scanned yet.', () => '');
+      return;
+    }
     renderDebugResults(payload.modules, 'Every module has a readme.md.', (module) => (
       '<div class="unresolved-item">' +
       '<div class="path">' + escapeHtml(module.owner) + ':' + escapeHtml(module.module_id) + '</div>' +
@@ -879,6 +891,10 @@
 
   async function runUnresolvedLookup() {
     const payload = await requestJson('/api/graph/unresolved');
+    if (!payload.scanned) {
+      renderDebugResults([], 'No content graph has been scanned yet.', () => '');
+      return;
+    }
     renderDebugResults(payload.unresolved_markers, 'No unresolved markers.', (marker) => (
       '<div class="unresolved-item">' +
       '<div class="path">' + escapeHtml(marker.core_file) + ':' + marker.line_number + '</div>' +
@@ -911,5 +927,24 @@
     loadGraph().catch((error) => setStatus(error.message));
   }
 
-  init();
+  if (typeof document !== 'undefined') {
+    init();
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      state,
+      MAX_SPEED,
+      MAX_RADIUS,
+      LIVE_PHYSICS_NODE_THRESHOLD,
+      buildSimulation,
+      buildGrid,
+      simulationStep,
+      nodeMatchesFilters,
+      tooltipText,
+      defaultScopeNodeIds,
+      computeExplorerKeepSet,
+      collectSubtreeIds,
+    };
+  }
 })();

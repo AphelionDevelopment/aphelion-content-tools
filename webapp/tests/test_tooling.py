@@ -5,6 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
+from webapp import tooling
 from webapp.tooling import ToolDefinition, build_tool_command, get_tool_run, list_tools, start_tool
 
 
@@ -73,6 +74,24 @@ class ToolingTests(unittest.TestCase):
 			start_tool(self.repo_root, TEST_DEFINITIONS, "arbitrary-command")
 		with self.assertRaises(ValueError):
 			get_tool_run("missing-run")
+
+	def test_eviction_drops_oldest_finished_runs_but_keeps_active_ones(self) -> None:
+		original_runs = tooling._RUNS
+		try:
+			tooling._RUNS = {}
+			for index in range(tooling.MAX_RETAINED_RUNS + 5):
+				tooling._RUNS[f"finished-{index}"] = {"status": "succeeded"}
+			tooling._RUNS["still-running"] = {"status": "running"}
+
+			with tooling._RUNS_LOCK:
+				tooling._evict_old_runs_locked()
+
+			self.assertLessEqual(len(tooling._RUNS), tooling.MAX_RETAINED_RUNS + 1)
+			self.assertIn("still-running", tooling._RUNS)
+			self.assertNotIn("finished-0", tooling._RUNS)
+			self.assertIn(f"finished-{tooling.MAX_RETAINED_RUNS + 4}", tooling._RUNS)
+		finally:
+			tooling._RUNS = original_runs
 
 
 if __name__ == "__main__":

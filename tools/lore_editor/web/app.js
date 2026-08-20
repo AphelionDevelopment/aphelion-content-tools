@@ -763,5 +763,11 @@ function showServerLaunchMessage() {
   document.querySelector('#search').disabled = true;
 }
 
-if (window.location.protocol === 'file:') showServerLaunchMessage();
-else initializeEditor();
+if (typeof window !== 'undefined') {
+  if (window.location.protocol === 'file:') showServerLaunchMessage();
+  else initializeEditor();
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {state, statusLabel, groupMatchSummary, slugify, iconRecord, isIconStateAvailable, reviewQueryUrl};
+}
