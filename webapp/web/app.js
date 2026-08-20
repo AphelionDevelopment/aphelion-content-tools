@@ -16,7 +16,28 @@ function setText(selector, value) {
 }
 
 function repositoryLabel(repository) {
-  return repository === 'game' ? 'Meridian-Rift' : 'Lore tools';
+  return repository === 'game' ? 'Meridian-Rift' : 'Aphelion Content Tools';
+}
+
+function renderChangedFileRow(repository, filePath) {
+  const row = document.createElement('details');
+  row.className = 'changed-file';
+  const summary = document.createElement('summary');
+  summary.textContent = filePath;
+  row.append(summary);
+  const diffOutput = document.createElement('pre');
+  diffOutput.className = 'tool-output diff-output';
+  diffOutput.textContent = 'Loading diff…';
+  row.append(diffOutput);
+  let loaded = false;
+  row.addEventListener('toggle', () => {
+    if (!row.open || loaded) return;
+    loaded = true;
+    requestJson('/api/git/diff?repository=' + encodeURIComponent(repository) + '&path=' + encodeURIComponent(filePath))
+      .then((payload) => { diffOutput.textContent = payload.diff || '(no textual diff for this change)'; })
+      .catch((error) => { diffOutput.textContent = error.message; loaded = false; });
+  });
+  return row;
 }
 
 function renderRepositoryStatus() {
@@ -33,14 +54,22 @@ function renderRepositoryStatus() {
     summary.textContent = status
       ? (status.dirty ? 'Changes pending' : 'Clean') + ' · ' + status.branch
       : 'Status unavailable';
-    const details = document.createElement('p');
-    details.className = 'metadata';
+    const metaLine = document.createElement('p');
+    metaLine.className = 'metadata';
     if (status) {
       const aheadBehind = (status.ahead ? ' · ahead ' + status.ahead : '') + (status.behind ? ' · behind ' + status.behind : '');
-      details.textContent = (status.changed_files?.length ? status.changed_files.length + ' changed file(s)' : 'No changed files') + aheadBehind;
-      if (status.conflicted) details.textContent += ' · conflicts need attention';
+      metaLine.textContent = (status.changed_files?.length ? status.changed_files.length + ' changed file(s)' : 'No changed files') + aheadBehind;
+      if (status.conflicted) metaLine.textContent += ' · conflicts need attention';
     }
-    card.append(heading, summary, details);
+    card.append(heading, summary, metaLine);
+    if (status?.changed_files?.length) {
+      const fileList = document.createElement('div');
+      fileList.className = 'changed-file-list';
+      for (const filePath of status.changed_files) {
+        fileList.append(renderChangedFileRow(repository, filePath));
+      }
+      card.append(fileList);
+    }
     list.append(card);
   }
 }

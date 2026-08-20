@@ -14,6 +14,8 @@ function resetState() {
   graph.state.filters.kinds = new Set(['module', 'master_file', 'core_file', 'directory', 'file']);
   graph.state.filters.owners = new Set(['nova', 'aphelion']);
   graph.state.filters.search = '';
+  graph.state.physicsMode = 'auto';
+  graph.state.livePhysicsThreshold = graph.LIVE_PHYSICS_NODE_THRESHOLD;
 }
 
 test('buildSimulation assigns positions, computes degree, and derives radius from degree', () => {
@@ -185,6 +187,32 @@ test('computeExplorerKeepSet keeps matches and their full ancestor chain', () =>
     ['dir:.', 'dir:modular_nova', 'module:nova:shuttle_toggle'].sort(),
   );
   assert.equal(keep.has('file:README.md'), false);
+});
+
+test('resolveLivePhysics uses the threshold when the mode is auto', () => {
+  resetState();
+  graph.state.livePhysicsThreshold = 100;
+
+  assert.equal(graph.resolveLivePhysics(50), true);
+  assert.equal(graph.resolveLivePhysics(150), false);
+  assert.equal(graph.resolveLivePhysics(0), false);
+});
+
+test('resolveLivePhysics "on" forces live physics regardless of node count', () => {
+  resetState();
+  graph.state.physicsMode = 'on';
+  graph.state.livePhysicsThreshold = 10;
+
+  assert.equal(graph.resolveLivePhysics(50000), true);
+  assert.equal(graph.resolveLivePhysics(0), false);
+});
+
+test('resolveLivePhysics "off" never enables live physics', () => {
+  resetState();
+  graph.state.physicsMode = 'off';
+
+  assert.equal(graph.resolveLivePhysics(1), false);
+  assert.equal(graph.resolveLivePhysics(50000), false);
 });
 
 test('collectSubtreeIds gathers a node and every descendant', () => {

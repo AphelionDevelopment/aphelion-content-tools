@@ -30,6 +30,7 @@ class MarkerEdge:
 	attribution: str
 	raw_label: str
 	original_text: str | None
+	line_text: str
 
 
 def _strip_trailing_comment_close(label: str) -> str:
@@ -56,6 +57,34 @@ def _extract_module_id(label_for_attribution: str, known_module_ids_by_fold: dic
 		if resolved is not None:
 			return resolved, "exact"
 	return None, "unattributed"
+
+
+def render_marker_line(line: str, new_label: str) -> str:
+	"""Return `line` with its marker label replaced by `new_label`, preserving everything else.
+
+	Reuses `_LINE_PATTERN` (the same grammar `parse_markers` reads) to locate the label span and
+	substitute it byte-for-byte around the edges. If the marker currently has no label at all (e.g. a
+	bare `// NOVA EDIT START`), one is inserted right after the last matched marker token. A trailing
+	`*/` comment-close captured inside the label (a same-line removal-block close) is preserved, though
+	its exact surrounding whitespace is normalized to a single space rather than reproduced verbatim.
+
+	Raises ValueError if `line` doesn't contain a recognizable NOVA/APHELION EDIT marker.
+	"""
+	match = _LINE_PATTERN.search(line)
+	if match is None:
+		raise ValueError("Line does not contain a recognizable NOVA/APHELION EDIT marker.")
+	new_label = new_label.strip()
+	if match.group("label") is not None:
+		label_start, label_end = match.span("label")
+		has_trailing_close = match.group("label").rstrip().endswith("*/")
+		replacement = new_label + " */" if has_trailing_close else new_label
+		return line[:label_start] + replacement + line[label_end:]
+	insertion_point = (
+		match.end("terminator") if match.group("terminator")
+		else match.end("kind") if match.group("kind")
+		else match.end("owner")
+	)
+	return line[:insertion_point] + " - " + new_label + line[insertion_point:]
 
 
 def parse_markers(text: str, known_module_ids: frozenset[str]) -> list[MarkerEdge]:
@@ -95,5 +124,6 @@ def parse_markers(text: str, known_module_ids: frozenset[str]) -> list[MarkerEdg
 			attribution=attribution,
 			raw_label=raw_label,
 			original_text=original_text,
+			line_text=line,
 		))
 	return edges

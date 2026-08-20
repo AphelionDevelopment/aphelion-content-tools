@@ -11,6 +11,6 @@ test('repositoryLabel maps the game repository to its display name', () => {
 });
 
 test('repositoryLabel maps anything else (including "tool") to the tool repository label', () => {
-  assert.equal(app.repositoryLabel('tool'), 'Lore tools');
-  assert.equal(app.repositoryLabel('unknown'), 'Lore tools');
+  assert.equal(app.repositoryLabel('tool'), 'Aphelion Content Tools');
+  assert.equal(app.repositoryLabel('unknown'), 'Aphelion Content Tools');
 });

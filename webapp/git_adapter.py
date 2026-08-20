@@ -192,21 +192,31 @@ def create_branch(repo_root: Path, branch_name: str) -> None:
 		_run_git(repo_root, ["switch", "--create", branch_name])
 
 
+def _resolve_tracked_path(repo_root: Path, relative_path: str) -> Path:
+	"""Validate a repository-relative path and return its resolved absolute form.
+
+	Rejects absolute paths and anything that would resolve outside repo_root, the same guard
+	stage_and_commit has always applied -- shared here so every new path-taking adapter call gets it.
+	"""
+	path = Path(relative_path)
+	if path.is_absolute():
+		raise ValueError("Path must be repository-relative.")
+	resolved_root = repo_root.resolve()
+	resolved_path = (resolved_root / path).resolve()
+	if not resolved_path.is_relative_to(resolved_root):
+		raise ValueError(f"Path escapes the repository: {relative_path}")
+	return resolved_path
+
+
 def stage_and_commit(repo_root: Path, relative_paths: tuple[str, ...], message: str) -> str:
 	if not relative_paths:
 		raise ValueError("At least one repository-relative path is required to commit.")
 	if not message.strip():
 		raise ValueError("Commit message must not be empty.")
-	resolved_root = repo_root.resolve()
 	validated_paths: list[str] = []
 	for relative_path in relative_paths:
-		path = Path(relative_path)
-		if path.is_absolute():
-			raise ValueError("Commit paths must be repository-relative.")
-		resolved_path = (resolved_root / path).resolve()
-		if not resolved_path.is_relative_to(resolved_root):
-			raise ValueError(f"Commit path escapes the repository: {relative_path}")
-		validated_paths.append(path.as_posix())
+		_resolve_tracked_path(repo_root, relative_path)
+		validated_paths.append(Path(relative_path).as_posix())
 	with _repo_lock(repo_root):
 		_run_git(repo_root, ["add", "--", *validated_paths])
 		no_changes = _run_git(repo_root, ["diff", "--cached", "--quiet", "--", *validated_paths], allow_nonzero=True)
@@ -236,3 +246,121 @@ def open_in_github_desktop(repo_root: Path) -> None:
 		)
 	except OSError as exc:
 		raise GitAdapterError(f"GitHub Desktop could not be opened: {exc}") from exc
+
+
+def git_diff(repo_root: Path, relative_path: str) -> str:
+	"""Return the working-tree diff (staged + unstaged combined) for a single repository-relative path."""
+	_resolve_tracked_path(repo_root, relative_path)
+	posix_path = Path(relative_path).as_posix()
+	with _repo_lock(repo_root):
+		result = _run_git(repo_root, ["diff", "HEAD", "--", posix_path])
+	return _truncate_output(result.stdout)
+
+
+def open_file_in_default_app(repo_root: Path, relative_path: str) -> None:
+	"""Open a repository file with whatever the OS has associated with its file type."""
+	resolved_path = _resolve_tracked_path(repo_root, relative_path)
+	if not resolved_path.is_file():
+		raise GitAdapterError(f"File does not exist: {relative_path}")
+	try:
+		os.startfile(str(resolved_path))  # noqa: S606 -- Windows-only by design, path is repo-root-bounded
+	except OSError as exc:
+		raise GitAdapterError(f"Could not open '{relative_path}' in the default app: {exc}") from exc
+
+
+def reveal_file_in_file_explorer(repo_root: Path, relative_path: str) -> None:
+	"""Open Windows Explorer with the file pre-selected."""
+	resolved_path = _resolve_tracked_path(repo_root, relative_path)
+	if not resolved_path.is_file():
+		raise GitAdapterError(f"File does not exist: {relative_path}")
+	try:
+		subprocess.Popen(
+			["explorer.exe", "/select,", str(resolved_path)],
+			stdin=subprocess.DEVNULL,
+			stdout=subprocess.DEVNULL,
+			stderr=subprocess.DEVNULL,
+		)
+	except OSError as exc:
+		raise GitAdapterError(f"Could not open File Explorer: {exc}") from exc
+
+
+_GITHUB_REMOTE_PATTERN = re.compile(
+	r"^(?:https://github\.com/|git@github\.com:)(?P<owner>[^/]+)/(?P<repo>.+?)(?:\.git)?/?$"
+)
+
+
+def parse_github_remote(remote_url: str) -> tuple[str, str] | None:
+	"""Return (owner, repo) if remote_url looks like a GitHub remote (https or ssh form), else None."""
+	match = _GITHUB_REMOTE_PATTERN.match(remote_url.strip())
+	if match is None:
+		return None
+	return match.group("owner"), match.group("repo")
+
+
+def github_blob_url(repo_root: Path, relative_path: str) -> str | None:
+	"""Build a github.com blob URL for a repository-relative path at its current revision.
+
+	Returns None if the repository has no 'origin' remote, or that remote isn't a GitHub URL. Pins to
+	the current revision (not a branch name) so the link never points at code that has since moved on.
+	"""
+	remote_url = repository_remote_url(repo_root)
+	if remote_url is None:
+		return None
+	parsed = parse_github_remote(remote_url)
+	if parsed is None:
+		return None
+	owner, repo = parsed
+	revision = repository_revision(repo_root)
+	posix_path = Path(relative_path).as_posix()
+	return f"https://github.com/{owner}/{repo}/blob/{revision}/{posix_path}"
+
+
+_PR_SUBJECT_PATTERN = re.compile(r"\(#(\d+)\)\s*$")
+_LOG_L_FORMAT = "\x02%H\x1f%an\x1f%ad\x1f%s\x03"
+
+
+def line_history(repo_root: Path, relative_path: str, line_number: int, *, max_commits: int = 5) -> list[dict[str, object]]:
+	"""Return up to max_commits commits that touched relative_path's given line, newest first.
+
+	Uses `git log -L` -- Git's own line-history tool -- so this needs no new dependency and stays
+	accurate across the line's history. Each entry includes a best-effort GitHub pull request URL
+	parsed from a trailing "(#1234)" in the commit subject (the standard squash-merge convention);
+	commits with no such marker simply have pr_url=None. No GitHub API calls are made.
+	"""
+	if line_number < 1:
+		raise ValueError("line_number must be a positive integer.")
+	posix_path = Path(relative_path).as_posix()
+	with _repo_lock(repo_root):
+		result = _run_git(
+			repo_root,
+			[
+				"log",
+				f"-L{line_number},{line_number}:{posix_path}",
+				f"-n{max_commits}",
+				"--no-color",
+				"--date=short",
+				f"--format={_LOG_L_FORMAT}",
+			],
+		)
+	remote_url = repository_remote_url(repo_root)
+	github_repo = parse_github_remote(remote_url) if remote_url else None
+
+	commits: list[dict[str, object]] = []
+	for chunk in result.stdout.split("\x02")[1:]:
+		header, _, rest = chunk.partition("\x03")
+		commit_hash, author, date, subject = header.split("\x1f", 3)
+		pr_url = None
+		if github_repo is not None:
+			pr_match = _PR_SUBJECT_PATTERN.search(subject)
+			if pr_match is not None:
+				pr_url = f"https://github.com/{github_repo[0]}/{github_repo[1]}/pull/{pr_match.group(1)}"
+		commits.append({
+			"commit": commit_hash,
+			"short_commit": commit_hash[:12],
+			"author": author,
+			"date": date,
+			"subject": subject,
+			"diff": rest.strip("\n"),
+			"pr_url": pr_url,
+		})
+	return commits

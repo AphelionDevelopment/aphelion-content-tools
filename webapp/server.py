@@ -52,15 +52,45 @@ def _load_api_functions():
 
 def _load_git_functions():
 	if __package__ in (None, ""):
-		from webapp.git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
+		from webapp.git_adapter import (
+			create_branch,
+			git_diff,
+			github_blob_url,
+			line_history,
+			open_file_in_default_app,
+			open_in_github_desktop,
+			repository_status,
+			reveal_file_in_file_explorer,
+			stage_and_commit,
+		)
 	else:
-		from .git_adapter import create_branch, open_in_github_desktop, repository_status, stage_and_commit
+		from .git_adapter import (
+			create_branch,
+			git_diff,
+			github_blob_url,
+			line_history,
+			open_file_in_default_app,
+			open_in_github_desktop,
+			repository_status,
+			reveal_file_in_file_explorer,
+			stage_and_commit,
+		)
 	return {
 		"create_branch": create_branch,
 		"repository_status": repository_status,
 		"stage_and_commit": stage_and_commit,
 		"open_in_github_desktop": open_in_github_desktop,
+		"git_diff": git_diff,
+		"github_blob_url": github_blob_url,
+		"open_file_in_default_app": open_file_in_default_app,
+		"reveal_file_in_file_explorer": reveal_file_in_file_explorer,
+		"line_history": line_history,
 	}
+
+
+def _load_marker_edit_functions():
+	from tools.content_graph.marker_edit import apply_marker_label_edit
+	return {"apply_marker_label_edit": apply_marker_label_edit}
 
 
 def _load_tooling_functions():
@@ -216,6 +246,30 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
+		if parsed.path == "/api/git/diff":
+			try:
+				query = parse_qs(parsed.query)
+				repository_name = query.get("repository", ["tool"])[0]
+				relative_path = query.get("path", [""])[0]
+				if not relative_path:
+					raise ValueError("Query parameter 'path' is required.")
+				_git_diff = _load_git_functions()["git_diff"]
+				self.send_json({"diff": _git_diff(self.repository_root(repository_name), relative_path)})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/git/github-url":
+			try:
+				query = parse_qs(parsed.query)
+				repository_name = query.get("repository", ["tool"])[0]
+				relative_path = query.get("path", [""])[0]
+				if not relative_path:
+					raise ValueError("Query parameter 'path' is required.")
+				_github_blob_url = _load_git_functions()["github_blob_url"]
+				self.send_json({"url": _github_blob_url(self.repository_root(repository_name), relative_path)})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
 		if parsed.path == "/api/export/stages":
 			try:
 				stage_root = self.export_stage_root()
@@ -308,6 +362,20 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 					return
 				graph, _manifest = cached
 				self.send_json({"scanned": True, "unresolved_markers": unresolved_markers(graph)})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/graph/marker-history":
+			try:
+				query = parse_qs(parsed.query)
+				core_file = query.get("core_file", [""])[0]
+				if not core_file:
+					raise ValueError("Query parameter 'core_file' is required.")
+				line_number = _query_int(query, "line", minimum=1)
+				if line_number is None:
+					raise ValueError("Query parameter 'line' is required.")
+				_line_history = _load_git_functions()["line_history"]
+				self.send_json({"commits": _line_history(self.server.game_repo_root, core_file, line_number)})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
@@ -423,6 +491,29 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 
 	def do_POST(self) -> None:
 		parsed = urlparse(self.path)
+		if parsed.path == "/api/graph/markers/edit":
+			try:
+				payload = self.read_json_body()
+				if not isinstance(payload, dict):
+					raise ValueError("Marker edit request must be a JSON object.")
+				core_file = payload.get("core_file")
+				line_number = payload.get("line_number")
+				expected_line = payload.get("expected_line")
+				new_label = payload.get("new_label")
+				if not isinstance(core_file, str) or not core_file:
+					raise ValueError("Marker edit request requires a string core_file.")
+				if not isinstance(line_number, int) or line_number < 1:
+					raise ValueError("Marker edit request requires a positive integer line_number.")
+				if not isinstance(expected_line, str):
+					raise ValueError("Marker edit request requires a string expected_line.")
+				if not isinstance(new_label, str) or not new_label.strip():
+					raise ValueError("Marker edit request requires a non-empty string new_label.")
+				_apply_marker_label_edit = _load_marker_edit_functions()["apply_marker_label_edit"]
+				_apply_marker_label_edit(self.server.game_repo_root, core_file, line_number, expected_line, new_label)
+				self.send_json({"edited": True, "core_file": core_file, "line_number": line_number})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
 		if parsed.path == "/api/export/prepare":
 			try:
 				if self.headers.get("Content-Length"):
@@ -516,6 +607,24 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				_open_desktop = _load_git_functions()["open_in_github_desktop"]
 				_open_desktop(self.repository_root(repository_name))
 				self.send_json({"repository": repository_name, "opened": True})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/git/open-file":
+			try:
+				payload = self.read_json_body()
+				if not isinstance(payload, dict) or not isinstance(payload.get("path"), str):
+					raise ValueError("Open-file request requires a string path.")
+				repository_name = payload.get("repository", "tool")
+				if not isinstance(repository_name, str):
+					raise ValueError("Open-file request repository must be a string.")
+				target = payload.get("target")
+				if target not in ("editor", "explorer"):
+					raise ValueError("Open-file request target must be 'editor' or 'explorer'.")
+				git_functions = _load_git_functions()
+				action = git_functions["open_file_in_default_app"] if target == "editor" else git_functions["reveal_file_in_file_explorer"]
+				action(self.repository_root(repository_name), payload["path"])
+				self.send_json({"repository": repository_name, "path": payload["path"], "opened": True})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return

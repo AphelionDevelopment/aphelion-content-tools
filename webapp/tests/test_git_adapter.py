@@ -11,10 +11,16 @@ from webapp import git_adapter
 from webapp.git_adapter import (
 	GitAdapterError,
 	create_branch,
+	git_diff,
+	github_blob_url,
+	line_history,
 	list_tracked_files,
+	open_file_in_default_app,
 	open_in_github_desktop,
+	parse_github_remote,
 	repository_remote_url,
 	repository_status,
+	reveal_file_in_file_explorer,
 	stage_and_commit,
 )
 
@@ -346,6 +352,102 @@ class GitAdapterTests(unittest.TestCase):
 
 		popen.assert_called_once()
 		self.assertEqual(["cmd.exe", "/d", "/c", "github.bat", str(repo_root.resolve())], popen.call_args.args[0])
+
+	def test_git_diff_reports_the_working_tree_change_for_one_path(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		(repo_root / "README.md").write_text("changed\n", encoding="utf-8")
+
+		diff = git_diff(repo_root, "README.md")
+
+		self.assertIn("-initial", diff)
+		self.assertIn("+changed", diff)
+
+	def test_git_diff_rejects_paths_outside_the_repository(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		with self.assertRaises(ValueError):
+			git_diff(repo_root, "../escape.txt")
+
+	def test_open_file_in_default_app_invokes_os_startfile_with_the_resolved_path(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		with patch("webapp.git_adapter.os.startfile", create=True) as startfile:
+			open_file_in_default_app(repo_root, "README.md")
+
+		startfile.assert_called_once_with(str((repo_root / "README.md").resolve()))
+
+	def test_open_file_in_default_app_rejects_a_missing_file(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		with patch("webapp.git_adapter.os.startfile", create=True) as startfile:
+			with self.assertRaises(GitAdapterError):
+				open_file_in_default_app(repo_root, "missing.txt")
+		startfile.assert_not_called()
+
+	def test_reveal_file_in_file_explorer_launches_explorer_with_select(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		with patch("webapp.git_adapter.subprocess.Popen") as popen:
+			reveal_file_in_file_explorer(repo_root, "README.md")
+
+		popen.assert_called_once()
+		self.assertEqual(
+			["explorer.exe", "/select,", str((repo_root / "README.md").resolve())],
+			popen.call_args.args[0],
+		)
+
+	def test_parse_github_remote_handles_https_and_ssh_forms(self) -> None:
+		self.assertEqual(("owner", "repo"), parse_github_remote("https://github.com/owner/repo.git"))
+		self.assertEqual(("owner", "repo"), parse_github_remote("https://github.com/owner/repo"))
+		self.assertEqual(("owner", "repo"), parse_github_remote("git@github.com:owner/repo.git"))
+		self.assertIsNone(parse_github_remote("https://example.invalid/owner/repo.git"))
+
+	def test_github_blob_url_returns_none_without_a_github_remote(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		self.assertIsNone(github_blob_url(repo_root, "README.md"))
+
+	def test_github_blob_url_pins_to_the_current_revision(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		run_git(repo_root, "remote", "add", "origin", "https://github.com/AphelionDevelopment/Meridian-Rift.git")
+		status = repository_status(repo_root)
+		head = run_git_allow_fail(repo_root, "rev-parse", "HEAD").stdout.strip()
+
+		url = github_blob_url(repo_root, "README.md")
+
+		self.assertEqual(f"https://github.com/AphelionDevelopment/Meridian-Rift/blob/{head}/README.md", url)
+		self.assertEqual("main", status.branch)
+
+	def test_line_history_reports_the_commit_that_introduced_the_line(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		run_git(repo_root, "remote", "add", "origin", "https://github.com/AphelionDevelopment/Meridian-Rift.git")
+
+		commits = line_history(repo_root, "README.md", 1)
+
+		self.assertEqual(1, len(commits))
+		self.assertEqual("Lore Writer", commits[0]["author"])
+		self.assertEqual("Initial", commits[0]["subject"])
+		self.assertIn("+initial", commits[0]["diff"])
+		self.assertIsNone(commits[0]["pr_url"])
+
+	def test_line_history_derives_a_pull_request_url_from_the_commit_subject(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		run_git(repo_root, "remote", "add", "origin", "https://github.com/AphelionDevelopment/Meridian-Rift.git")
+		(repo_root / "README.md").write_text("second\n", encoding="utf-8")
+		run_git(repo_root, "commit", "-am", "Fix the thing (#42)")
+
+		commits = line_history(repo_root, "README.md", 1)
+
+		self.assertEqual("https://github.com/AphelionDevelopment/Meridian-Rift/pull/42", commits[0]["pr_url"])
 
 
 if __name__ == "__main__":

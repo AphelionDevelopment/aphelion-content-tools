@@ -63,7 +63,10 @@
     lastPointer: null,
     simulationDone: false,
     livePhysics: false,
+    physicsMode: 'auto',
+    livePhysicsThreshold: LIVE_PHYSICS_NODE_THRESHOLD,
     simFrameHandle: null,
+    dragPhysicsFrameHandle: null,
     perf: {frameMs: 0},
   };
 
@@ -238,12 +241,18 @@
     }
   }
 
+  function resolveLivePhysics(nodeCount) {
+    if (state.physicsMode === 'on') return nodeCount > 0;
+    if (state.physicsMode === 'off') return false;
+    return nodeCount > 0 && nodeCount <= state.livePhysicsThreshold;
+  }
+
   function runSimulation(nodes, edges, onDone) {
     if (state.simFrameHandle !== null) {
       window.cancelAnimationFrame(state.simFrameHandle);
       state.simFrameHandle = null;
     }
-    const live = nodes.length > 0 && nodes.length <= LIVE_PHYSICS_NODE_THRESHOLD;
+    const live = resolveLivePhysics(nodes.length);
     state.livePhysics = live;
     let iteration = 0;
     let settled = false;
@@ -279,8 +288,26 @@
     state.simFrameHandle = window.requestAnimationFrame(frame);
   }
 
+  function startDragPhysics() {
+    if (state.physicsMode === 'off' || state.livePhysics || state.dragPhysicsFrameHandle !== null) return;
+    function frame(timestamp) {
+      simulationStep(state.nodes, state.edges, LIVE_TEMPERATURE);
+      draw();
+      renderPhysicsStats();
+      state.dragPhysicsFrameHandle = window.requestAnimationFrame(frame);
+    }
+    state.dragPhysicsFrameHandle = window.requestAnimationFrame(frame);
+  }
+
+  function stopDragPhysics() {
+    if (state.dragPhysicsFrameHandle !== null) {
+      window.cancelAnimationFrame(state.dragPhysicsFrameHandle);
+      state.dragPhysicsFrameHandle = null;
+    }
+  }
+
   function nudgeSimulation() {
-    if (state.livePhysics) return;
+    if (state.livePhysics || state.physicsMode === 'off') return;
     if (state.simFrameHandle !== null) {
       window.cancelAnimationFrame(state.simFrameHandle);
       state.simFrameHandle = null;
@@ -405,6 +432,53 @@
     return closest;
   }
 
+  async function openInGithub(repository, path) {
+    const payload = await requestJson('/api/git/github-url?repository=' + encodeURIComponent(repository) + '&path=' + encodeURIComponent(path));
+    if (!payload.url) throw new Error('No GitHub remote is configured for this repository.');
+    window.open(payload.url, '_blank', 'noopener');
+  }
+
+  async function openInEditor(repository, path) {
+    await requestJson('/api/git/open-file', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repository, path, target: 'editor'}),
+    });
+  }
+
+  async function revealInExplorer(repository, path) {
+    await requestJson('/api/git/open-file', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repository, path, target: 'explorer'}),
+    });
+  }
+
+  function renderOpenActions(container, repository, path) {
+    const row = document.createElement('div');
+    row.className = 'open-actions button-row';
+    const explorerButton = document.createElement('button');
+    explorerButton.type = 'button';
+    explorerButton.className = 'secondary-button';
+    explorerButton.textContent = 'Show in Explorer';
+    explorerButton.addEventListener('click', () => revealInExplorer(repository, path).catch((error) => setStatus(error.message)));
+
+    const editorButton = document.createElement('button');
+    editorButton.type = 'button';
+    editorButton.className = 'secondary-button';
+    editorButton.textContent = 'Open in editor';
+    editorButton.addEventListener('click', () => openInEditor(repository, path).catch((error) => setStatus(error.message)));
+
+    const githubButton = document.createElement('button');
+    githubButton.type = 'button';
+    githubButton.className = 'secondary-button';
+    githubButton.textContent = 'Open on GitHub';
+    githubButton.addEventListener('click', () => openInGithub(repository, path).catch((error) => setStatus(error.message)));
+
+    row.append(explorerButton, editorButton, githubButton);
+    container.append(row);
+  }
+
   function renderNodeDetail(node) {
     const container = document.getElementById('node-detail');
     if (!node) {
@@ -433,6 +507,7 @@
       return '<div class="node-detail-row">' + escapeHtml(otherLabel) + ' — <span class="node-detail-label">' + escapeHtml(detail) + '</span></div>';
     }).join('');
     container.innerHTML = rowsHtml + '<h3>Edges (' + connectedEdges.length + ')</h3>' + (edgesHtml || '<p class="metadata">None</p>');
+    if (node.path) renderOpenActions(container, 'game', node.path);
   }
 
   function tooltipText(node) {
@@ -469,7 +544,7 @@
     const container = document.getElementById('physics-stats');
     if (!container) return;
     const visibleCount = state.nodes.filter((node) => node.visible).length;
-    const mode = state.livePhysics ? 'Live (continuous)' : 'Static (settled)';
+    const mode = (state.livePhysics ? 'Live (continuous)' : 'Static (settled)') + ' — toggle: ' + state.physicsMode;
     const frameMs = state.perf.frameMs;
     const frameText = frameMs > 0 ? frameMs.toFixed(1) + ' ms (' + Math.round(1000 / frameMs) + ' fps)' : '—';
     const rows = [
@@ -477,7 +552,7 @@
       ['Nodes visible', visibleCount],
       ['Edges in scope', state.edges.length],
       ['Simulation mode', mode],
-      ['Live physics threshold', LIVE_PHYSICS_NODE_THRESHOLD + ' nodes'],
+      ['Live physics threshold', state.livePhysicsThreshold + ' nodes (used when toggle is auto)'],
       ['Frame time', frameText],
     ];
     container.innerHTML = rows.map(([label, value]) =>
@@ -485,23 +560,138 @@
     ).join('');
   }
 
+  function renderUnresolvedMarkerItem(marker) {
+    const item = document.createElement('div');
+    item.className = 'unresolved-item';
+
+    const pathDiv = document.createElement('div');
+    pathDiv.className = 'path';
+    pathDiv.textContent = marker.core_file + ':' + marker.line_number;
+
+    const metaDiv = document.createElement('div');
+    metaDiv.textContent = marker.owner + ' ' + marker.edit_type + ' (' + marker.attribution + ')';
+
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'metadata';
+    labelDiv.textContent = marker.raw_label || '(no label)';
+
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'button-row';
+    const historyButton = document.createElement('button');
+    historyButton.type = 'button';
+    historyButton.className = 'secondary-button';
+    historyButton.textContent = 'View history';
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'secondary-button';
+    editButton.textContent = 'Edit label';
+    actionsRow.append(historyButton, editButton);
+
+    const historyContainer = document.createElement('div');
+    historyContainer.className = 'marker-history';
+    historyContainer.hidden = true;
+
+    const editContainer = document.createElement('div');
+    editContainer.className = 'marker-edit';
+    editContainer.hidden = true;
+
+    item.append(pathDiv, metaDiv, labelDiv, actionsRow, historyContainer, editContainer);
+
+    let historyLoaded = false;
+    historyButton.addEventListener('click', async () => {
+      historyContainer.hidden = !historyContainer.hidden;
+      if (historyContainer.hidden || historyLoaded) return;
+      historyLoaded = true;
+      historyContainer.innerHTML = '<p class="metadata">Loading history…</p>';
+      try {
+        const payload = await requestJson('/api/graph/marker-history?core_file=' + encodeURIComponent(marker.core_file) + '&line=' + marker.line_number);
+        if (!payload.commits.length) {
+          historyContainer.innerHTML = '<p class="metadata">No Git history found for this line.</p>';
+          return;
+        }
+        historyContainer.innerHTML = payload.commits.map((commit) => (
+          '<div class="marker-history-commit">' +
+          '<div><strong>' + escapeHtml(commit.short_commit) + '</strong> ' + escapeHtml(commit.author) + ' · ' + escapeHtml(commit.date) +
+          (commit.pr_url ? ' · <a href="' + escapeHtml(commit.pr_url) + '" target="_blank" rel="noopener">Pull request</a>' : '') + '</div>' +
+          '<div class="metadata">' + escapeHtml(commit.subject) + '</div>' +
+          '<pre class="tool-output">' + escapeHtml(commit.diff) + '</pre>' +
+          '</div>'
+        )).join('');
+      } catch (error) {
+        historyContainer.innerHTML = '<p class="metadata">' + escapeHtml(error.message) + '</p>';
+        historyLoaded = false;
+      }
+    });
+
+    let editBuilt = false;
+    editButton.addEventListener('click', () => {
+      editContainer.hidden = !editContainer.hidden;
+      if (editContainer.hidden || editBuilt) return;
+      editBuilt = true;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = marker.raw_label || '';
+      const saveButton = document.createElement('button');
+      saveButton.type = 'button';
+      saveButton.textContent = 'Save';
+      const statusText = document.createElement('p');
+      statusText.className = 'metadata';
+      const row = document.createElement('div');
+      row.className = 'button-row';
+      row.append(input, saveButton);
+      editContainer.append(row, statusText);
+      saveButton.addEventListener('click', () => {
+        saveButton.disabled = true;
+        requestJson('/api/graph/markers/edit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            core_file: marker.core_file,
+            line_number: marker.line_number,
+            expected_line: marker.line_text,
+            new_label: input.value,
+          }),
+        }).then(() => {
+          statusText.textContent = '';
+          const savedText = document.createElement('span');
+          savedText.textContent = 'Saved. ';
+          const rescanButton = document.createElement('button');
+          rescanButton.type = 'button';
+          rescanButton.className = 'secondary-button';
+          rescanButton.textContent = 'Rescan to update the graph';
+          rescanButton.addEventListener('click', () => runScan().catch((error) => setStatus(error.message)));
+          statusText.append(savedText, rescanButton);
+        }).catch((error) => {
+          statusText.textContent = error.message;
+        }).finally(() => {
+          saveButton.disabled = false;
+        });
+      });
+    });
+
+    return item;
+  }
+
   function renderUnresolvedMarkers(graph) {
     const list = document.getElementById('unresolved-list');
     const markers = (graph.unresolved_markers || []).slice(0, MAX_UNRESOLVED_RENDERED);
+    list.replaceChildren();
     if (!markers.length) {
-      list.innerHTML = '<p class="metadata">None found.</p>';
+      const empty = document.createElement('p');
+      empty.className = 'metadata';
+      empty.textContent = 'None found.';
+      list.append(empty);
       return;
     }
-    list.innerHTML = markers.map((marker) => (
-      '<div class="unresolved-item">' +
-      '<div class="path">' + escapeHtml(marker.core_file) + ':' + marker.line_number + '</div>' +
-      '<div>' + escapeHtml(marker.owner) + ' ' + escapeHtml(marker.edit_type) + ' (' + escapeHtml(marker.attribution) + ')</div>' +
-      '<div class="metadata">' + escapeHtml(marker.raw_label || '(no label)') + '</div>' +
-      '</div>'
-    )).join('');
+    for (const marker of markers) {
+      list.append(renderUnresolvedMarkerItem(marker));
+    }
     const total = (graph.unresolved_markers || []).length;
     if (total > MAX_UNRESOLVED_RENDERED) {
-      list.innerHTML += '<p class="metadata">' + (total - MAX_UNRESOLVED_RENDERED) + ' more not shown.</p>';
+      const more = document.createElement('p');
+      more.className = 'metadata';
+      more.textContent = (total - MAX_UNRESOLVED_RENDERED) + ' more not shown.';
+      list.append(more);
     }
   }
 
@@ -683,8 +873,10 @@
       state.dragging = !hit;
       state.hasDragged = false;
       state.lastPointer = {x: event.clientX, y: event.clientY};
+      if (hit) startDragPhysics();
     });
     window.addEventListener('mouseup', () => {
+      stopDragPhysics();
       if (state.draggingNode && state.hasDragged) nudgeSimulation();
       state.dragging = false;
       state.draggingNode = null;
@@ -917,6 +1109,26 @@
     if (regenerateButton) {
       regenerateButton.addEventListener('click', () => applyScope(new Set(state.scope)));
     }
+    document.querySelectorAll('input[name="physics-mode"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        state.physicsMode = input.value;
+        state.simulationDone = false;
+        runSimulation(state.nodes, state.edges, () => applyFilters());
+      });
+    });
+    const thresholdInput = document.getElementById('physics-threshold');
+    if (thresholdInput) {
+      thresholdInput.addEventListener('change', () => {
+        const value = Number(thresholdInput.value);
+        if (!Number.isFinite(value) || value < 1) return;
+        state.livePhysicsThreshold = value;
+        if (state.physicsMode === 'auto') {
+          state.simulationDone = false;
+          runSimulation(state.nodes, state.edges, () => applyFilters());
+        }
+      });
+    }
   }
 
   function init() {
@@ -940,6 +1152,7 @@
       buildSimulation,
       buildGrid,
       simulationStep,
+      resolveLivePhysics,
       nodeMatchesFilters,
       tooltipText,
       defaultScopeNodeIds,

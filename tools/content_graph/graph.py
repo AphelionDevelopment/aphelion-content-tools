@@ -103,6 +103,7 @@ def _marker_payload(core_path: str, marker: MarkerEdge) -> dict[str, object]:
 		"attribution": marker.attribution,
 		"raw_label": marker.raw_label,
 		"original_text": marker.original_text,
+		"line_text": marker.line_text,
 	}
 
 

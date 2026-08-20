@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from tools.content_graph.markers import parse_markers
+from tools.content_graph.markers import parse_markers, render_marker_line
 
 
 class MarkerParsingTests(unittest.TestCase):
@@ -154,6 +154,43 @@ class MarkerParsingTests(unittest.TestCase):
 
 		self.assertEqual([2, 4], [edge.line_number for edge in edges])
 		self.assertEqual(["addition", "removal"], [edge.edit_type for edge in edges])
+
+
+class RenderMarkerLineTests(unittest.TestCase):
+	def test_replaces_an_existing_label_and_reparses_cleanly(self) -> None:
+		line = "// NOVA EDIT ADDITION START - SHUTTLE_TOGGLE - (Optional Reason/comment)"
+
+		rendered = render_marker_line(line, "shuttle_toggle")
+
+		self.assertEqual("// NOVA EDIT ADDITION START - shuttle_toggle", rendered)
+		edges = parse_markers(rendered, frozenset({"shuttle_toggle"}))
+		self.assertEqual("shuttle_toggle", edges[0].source_module_id)
+		self.assertEqual("exact", edges[0].attribution)
+
+	def test_inserts_a_label_on_a_bare_marker_with_none(self) -> None:
+		line = "// NOVA EDIT START"
+
+		rendered = render_marker_line(line, "shuttle_toggle")
+
+		self.assertEqual("// NOVA EDIT START - shuttle_toggle", rendered)
+
+	def test_preserves_a_same_line_trailing_comment_close(self) -> None:
+		line = "/* // NOVA EDIT ADDITION START - SHUTTLE_TOGGLE */"
+
+		rendered = render_marker_line(line, "gags")
+
+		self.assertEqual("/* // NOVA EDIT ADDITION START - gags */", rendered)
+
+	def test_preserves_surrounding_code_before_the_marker(self) -> None:
+		line = "'modular_nova', // NOVA EDIT ADDITION - Making the cutter actually work"
+
+		rendered = render_marker_line(line, "advanced_shuttles")
+
+		self.assertEqual("'modular_nova', // NOVA EDIT ADDITION - advanced_shuttles", rendered)
+
+	def test_rejects_a_line_with_no_marker(self) -> None:
+		with self.assertRaises(ValueError):
+			render_marker_line("var/adminEmergencyNoRecall = FALSE", "shuttle_toggle")
 
 
 if __name__ == "__main__":

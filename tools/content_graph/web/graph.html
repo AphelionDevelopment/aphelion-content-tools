@@ -44,7 +44,7 @@
           <fieldset>
             <legend>Node kinds</legend>
             <label class="checkbox-label"><input type="checkbox" data-kind="module" checked /> Modules</label>
-            <label class="checkbox-label"><input type="checkbox" data-kind="master_file" checked /> master_files overrides</label>
+            <label class="checkbox-label"><input type="checkbox" data-kind="master_file" checked /> Master files overrides</label>
             <label class="checkbox-label"><input type="checkbox" data-kind="core_file" checked /> Core files with markers</label>
             <label class="checkbox-label"><input type="checkbox" data-kind="directory" checked /> Directories</label>
             <label class="checkbox-label"><input type="checkbox" data-kind="file" checked /> Other files</label>
@@ -58,7 +58,7 @@
 
           <fieldset>
             <legend>Edge relations</legend>
-            <label class="checkbox-label"><input type="checkbox" data-relation="master_files_mirror" checked /> master_files mirror</label>
+            <label class="checkbox-label"><input type="checkbox" data-relation="master_files_mirror" checked /> Master files mirror</label>
             <label class="checkbox-label"><input type="checkbox" data-relation="marker_edit" checked /> Marker edit</label>
             <label class="checkbox-label"><input type="checkbox" data-relation="contains" checked /> Repository structure</label>
           </fieldset>
@@ -92,6 +92,16 @@
       </div>
       <div class="physics-columns">
         <fieldset>
+          <legend>Mode</legend>
+          <label class="checkbox-label"><input type="radio" name="physics-mode" value="auto" checked /> Auto (based on node count)</label>
+          <label class="checkbox-label"><input type="radio" name="physics-mode" value="on" /> On (always live)</label>
+          <label class="checkbox-label"><input type="radio" name="physics-mode" value="off" /> Off (static layout only)</label>
+          <label class="slider-label">Live physics threshold (nodes)
+            <input id="physics-threshold" type="number" min="100" max="10000" step="100" value="1500" />
+          </label>
+        </fieldset>
+
+        <fieldset>
           <legend>Forces</legend>
           <label class="slider-label">Repel force
             <input type="range" data-force="repulsion" min="500" max="6000" step="100" value="2600" />
@@ -116,9 +126,12 @@
 
     <section class="card debug-panel">
       <h2>Debug</h2>
-      <p class="metadata">Query the cached graph directly instead of hunting for it on the canvas.</p>
+      <p class="metadata">Answer specific questions about the cached graph directly, by path or module id,
+        instead of hunting for the right node on the canvas. These three lookups query the same cache the
+        graph itself renders from — nothing here re-scans the checkout.</p>
 
       <label for="debug-core-file">Edits touching a core file (exact path)</label>
+      <p class="metadata">Every marker edge and master_files override that touches the file you enter, resolved or not.</p>
       <div class="button-row">
         <input id="debug-core-file" type="search" placeholder="code/modules/shuttle/shuttle.dm" />
         <button id="debug-core-file-button" type="button" class="secondary-button">Look up edits</button>
@@ -128,11 +141,16 @@
         <button id="debug-missing-readme-button" type="button" class="secondary-button">Modules missing readme.md</button>
         <button id="debug-unresolved-button" type="button" class="secondary-button">Unresolved markers</button>
       </div>
+      <p class="metadata">"Modules missing readme.md" lists every module with no documentation file at all.
+        "Unresolved markers" repeats the list below on demand, useful after checking a different core file above.</p>
 
       <div id="debug-results" class="unresolved-list"></div>
 
       <h3>Unresolved markers</h3>
-      <p class="metadata">Markers whose module attribution could not be confirmed against a real module directory.</p>
+      <p class="metadata">Markers whose module attribution could not be confirmed against a real module
+        directory — most existing markers in Meridian-Rift only carry a free-text reason, not a clean
+        module id, so this list is expected to be long. Expand a marker to review its Git history and
+        associated pull requests, or to correct its label so a future scan attributes it correctly.</p>
       <div id="unresolved-list" class="unresolved-list"></div>
     </section>
   </main>

@@ -40,7 +40,7 @@ be beside this repository, but the launcher will offer that location by default)
 
 ## Saving your work locally
 
-The **Repositories** panel on the **Home** page covers this repository (`Lore tools`) and, if
+The **Repositories** panel on the **Home** page covers this repository (`Aphelion Content Tools`) and, if
 configured, your `Meridian-Rift` checkout (`Meridian-Rift`) separately:
 
 1. Create a local branch for your change (e.g. `lore/company-review`).

@@ -359,6 +359,54 @@ function setEditorControls() {
   document.querySelector('#create-override-button').hidden = !state.selected || state.selected.has_override || state.editing;
 }
 
+async function openInGithub(repository, path) {
+  const payload = await requestJson('/api/git/github-url?repository=' + encodeURIComponent(repository) + '&path=' + encodeURIComponent(path));
+  if (!payload.url) throw new Error('No GitHub remote is configured for this repository.');
+  window.open(payload.url, '_blank', 'noopener');
+}
+
+async function openInEditor(repository, path) {
+  await requestJson('/api/git/open-file', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({repository, path, target: 'editor'}),
+  });
+}
+
+async function revealInExplorer(repository, path) {
+  await requestJson('/api/git/open-file', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({repository, path, target: 'explorer'}),
+  });
+}
+
+function renderEntryOpenActions(entry) {
+  const container = document.querySelector('#entry-open-actions');
+  container.replaceChildren();
+  if (!entry.has_override || !entry.source_file) return;
+  const path = entry.source_file;
+  const explorerButton = document.createElement('button');
+  explorerButton.type = 'button';
+  explorerButton.className = 'secondary-button';
+  explorerButton.textContent = 'Show in Explorer';
+  explorerButton.addEventListener('click', () => revealInExplorer('tool', path).catch((error) => setText('#status-message', error.message)));
+
+  const editorButton = document.createElement('button');
+  editorButton.type = 'button';
+  editorButton.className = 'secondary-button';
+  editorButton.textContent = 'Open in editor';
+  editorButton.addEventListener('click', () => openInEditor('tool', path).catch((error) => setText('#status-message', error.message)));
+
+  const githubButton = document.createElement('button');
+  githubButton.type = 'button';
+  githubButton.className = 'secondary-button';
+  githubButton.textContent = 'Open on GitHub';
+  githubButton.addEventListener('click', () => openInGithub('tool', path).catch((error) => setText('#status-message', error.message)));
+
+  container.append(explorerButton, editorButton, githubButton);
+}
+
 function selectEntry(entry) {
   state.selected = entry;
   state.editing = Boolean(entry.has_override);
@@ -392,6 +440,7 @@ function selectEntry(entry) {
   document.querySelector('#icon-field').value = 'icon';
   renderIconEditor(entry);
   setEditorControls();
+  renderEntryOpenActions(entry);
   document.querySelector('#validation-panel').textContent = '';
 }
 

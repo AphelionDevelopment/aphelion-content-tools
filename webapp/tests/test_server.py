@@ -60,6 +60,74 @@ class StandaloneServerTests(unittest.TestCase):
 				server.server_close()
 				thread.join(timeout=2)
 
+	def test_server_exposes_git_diff_and_github_url_endpoints(self) -> None:
+		with TemporaryDirectory() as temporary_directory:
+			root = Path(temporary_directory)
+			tool_root = root / "tool"
+			(tool_root / "tools/lore_editor/catalog").mkdir(parents=True)
+			(tool_root / "README.md").write_text("initial\n", encoding="utf-8")
+			run_git(tool_root, "init", "--initial-branch=main")
+			run_git(tool_root, "config", "user.name", "Lore Writer")
+			run_git(tool_root, "config", "user.email", "writer@example.invalid")
+			run_git(tool_root, "add", "--", "README.md")
+			run_git(tool_root, "commit", "-m", "Initial")
+			run_git(tool_root, "remote", "add", "origin", "https://github.com/AphelionDevelopment/Meridian-Rift.git")
+			(tool_root / "README.md").write_text("changed\n", encoding="utf-8")
+
+			server = create_server(tool_root, 0)
+			thread = threading.Thread(target=server.serve_forever, daemon=True)
+			thread.start()
+			try:
+				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/git/diff?repository=tool&path=README.md") as response:
+					diff_payload = json.loads(response.read())
+				self.assertIn("+changed", diff_payload["diff"])
+
+				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/git/github-url?repository=tool&path=README.md") as response:
+					url_payload = json.loads(response.read())
+				self.assertTrue(url_payload["url"].startswith("https://github.com/AphelionDevelopment/Meridian-Rift/blob/"))
+				self.assertTrue(url_payload["url"].endswith("/README.md"))
+			finally:
+				server.shutdown()
+				server.server_close()
+				thread.join(timeout=2)
+
+	def test_server_open_file_endpoint_dispatches_to_editor_or_explorer(self) -> None:
+		with TemporaryDirectory() as temporary_directory:
+			root = Path(temporary_directory)
+			tool_root = root / "tool"
+			(tool_root / "tools/lore_editor/catalog").mkdir(parents=True)
+			(tool_root / "README.md").write_text("initial\n", encoding="utf-8")
+
+			server = create_server(tool_root, 0)
+			thread = threading.Thread(target=server.serve_forever, daemon=True)
+			thread.start()
+			try:
+				with patch("webapp.git_adapter.os.startfile", create=True) as startfile:
+					request = Request(
+						f"http://127.0.0.1:{server.server_address[1]}/api/git/open-file",
+						data=json.dumps({"repository": "tool", "path": "README.md", "target": "editor"}).encode("utf-8"),
+						method="POST",
+						headers={"Content-Type": "application/json"},
+					)
+					with urlopen(request) as response:
+						self.assertTrue(json.loads(response.read())["opened"])
+				startfile.assert_called_once()
+
+				with patch("webapp.git_adapter.subprocess.Popen") as popen:
+					request = Request(
+						f"http://127.0.0.1:{server.server_address[1]}/api/git/open-file",
+						data=json.dumps({"repository": "tool", "path": "README.md", "target": "explorer"}).encode("utf-8"),
+						method="POST",
+						headers={"Content-Type": "application/json"},
+					)
+					with urlopen(request) as response:
+						self.assertTrue(json.loads(response.read())["opened"])
+				popen.assert_called_once()
+			finally:
+				server.shutdown()
+				server.server_close()
+				thread.join(timeout=2)
+
 	def test_server_uses_separate_game_checkout_for_icon_assets(self) -> None:
 		with TemporaryDirectory() as temporary_directory:
 			root = Path(temporary_directory)

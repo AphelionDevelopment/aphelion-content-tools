@@ -25,7 +25,7 @@
 }
 
 body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #310047, #17072e 62%); }
-.shell { max-width: 1600px; margin: 0 auto; padding: 1.5rem; }
+.shell { max-width: 1800px; margin: 0 auto; padding: 1.5rem clamp(1.5rem, 3vw, 4rem); box-sizing: border-box; }
 .hero { margin-bottom: 1rem; }
 .eyebrow { color: var(--plasma); text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; margin: 0 0 .25rem; }
 .tool-nav { display: flex; gap: .5rem; margin-bottom: 1rem; }
@@ -53,7 +53,7 @@ button:disabled { cursor: wait; opacity: .55; }
 .explorer-panel, .canvas-panel { box-sizing: border-box; height: 75vh; }
 .explorer-panel { overflow: auto; }
 .physics-panel { margin-top: 1rem; }
-.physics-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.physics-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; align-items: start; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 fieldset { border: 1px solid var(--border); border-radius: .55rem; margin: 1rem 0; padding: .75rem; }
 legend { color: var(--plasma); padding: 0 .35rem; }
@@ -61,7 +61,7 @@ legend { color: var(--plasma); padding: 0 .35rem; }
 .checkbox-label input { width: auto; accent-color: var(--magenta); }
 .slider-label { display: flex; flex-direction: column; gap: .25rem; margin: .6rem 0; font-size: .82rem; color: var(--muted); }
 .slider-label input[type="range"] { width: 100%; accent-color: var(--magenta); }
-input[type="search"] { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: .4rem; background: rgba(23, 7, 46, .9); color: inherit; padding: .6rem; font: inherit; }
+input[type="search"], input[type="text"], input[type="number"] { box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: .4rem; background: rgba(23, 7, 46, .9); color: inherit; padding: .6rem; font: inherit; }
 .metadata { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
 
 .collapsible-section { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: .5rem; }
@@ -91,7 +91,15 @@ input[type="search"] { box-sizing: border-box; width: 100%; border: 1px solid va
 .node-detail-row { margin: .3rem 0; }
 .node-detail-label { color: var(--muted); }
 .unresolved-list { display: grid; gap: .4rem; max-height: 14rem; overflow: auto; margin-top: .5rem; }
+#unresolved-list { max-height: 32rem; }
 .unresolved-item { padding: .5rem; background: rgba(23, 7, 46, .68); border: 1px solid var(--violet); border-radius: .4rem; font-size: .8rem; }
+.unresolved-item .button-row { margin-top: .5rem; }
+.marker-history { margin-top: .5rem; display: grid; gap: .5rem; }
+.marker-history-commit { padding: .4rem .5rem; background: rgba(13, 3, 27, .6); border: 1px solid var(--border); border-radius: .35rem; }
+.marker-history-commit pre { max-height: 12rem; font-size: .72rem; }
+.marker-history-commit a { color: var(--plasma); }
+.marker-edit { margin-top: .5rem; }
+.marker-edit input[type="text"] { flex: 1; }
 .unresolved-item .path { color: var(--plasma); overflow-wrap: anywhere; }
 
 #physics-stats .node-detail-row { margin: .3rem 0; font-size: .8rem; }
