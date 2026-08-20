@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lore Overhaul Editor</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">Aphelion content tools</p>
+      <h1>Lore Overhaul Editor</h1>
+      <p>Review catalog content, organize it into writer groups, and maintain overrides without editing DM.</p>
+    </header>
+
+    <section class="card status-card" aria-label="Content status">
+      <div class="status-summary">
+        <p class="eyebrow">Workspace status</p>
+        <h2>Writer review desk</h2>
+        <p id="status-message">Loading catalog…</p>
+      </div>
+      <div class="reviewer-control">
+        <label for="reviewer-name">Reviewer name</label>
+        <input id="reviewer-name" type="text" placeholder="Your name" autocomplete="name">
+        <p class="metadata">Used for reviewed and attention decisions.</p>
+      </div>
+    </section>
+
+    <section class="card repository-card" aria-label="Repository workflow">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Local Git workflow</p>
+          <h2>Repositories</h2>
+          <p class="metadata">The app can make local commits and open GitHub Desktop. Pushes, pull requests, and complex merges stay in GitHub Desktop.</p>
+        </div>
+        <button id="refresh-repository-status" class="secondary-button" type="button">Refresh status</button>
+      </div>
+      <div id="repository-status-list" class="repository-status-list"></div>
+      <div class="workflow-controls">
+        <label for="git-repository">Repository</label>
+        <select id="git-repository">
+          <option value="tool">Lore tools</option>
+          <option value="game">Meridian-Rift</option>
+        </select>
+        <label for="git-branch-name">New local branch</label>
+        <input id="git-branch-name" type="text" placeholder="lore/company-review">
+        <button id="create-branch-button" type="button">Create branch</button>
+        <label for="git-commit-message">Commit message</label>
+        <input id="git-commit-message" type="text" placeholder="Update lore review decisions">
+        <button id="commit-repository-button" type="button">Commit changed files</button>
+        <button id="open-github-desktop-button" class="secondary-button" type="button">Open in GitHub Desktop</button>
+      </div>
+      <p id="repository-message" class="metadata" aria-live="polite"></p>
+    </section>
+
+    <section class="workspace" aria-label="Lore review workspace">
+      <aside class="card navigation-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Review queue</p>
+            <h2>Catalog</h2>
+          </div>
+          <span id="result-count" class="count-badge">0</span>
+        </div>
+        <label for="search">Search names, descriptions, groups, and references</label>
+        <input id="search" type="search" placeholder="Try Nanotrasen, language, or radio">
+
+        <div class="filter-heading">
+          <h3>Groups</h3>
+          <div class="button-row">
+            <button id="create-group-button" class="text-button" type="button">New group</button>
+            <button id="clear-group-filters" class="text-button" type="button">Clear</button>
+          </div>
+        </div>
+        <div id="group-filters" class="filter-list" aria-label="Group filters"></div>
+
+        <fieldset class="compact-fieldset">
+          <legend>Visibility</legend>
+          <label class="checkbox-label"><input id="show-directional" type="checkbox"> Show directional subtypes</label>
+          <label class="checkbox-label"><input id="show-redundant" type="checkbox"> Show redundant descriptions</label>
+          <p id="suppression-summary" class="metadata">No suppressed catalog targets.</p>
+        </fieldset>
+
+        <div class="filter-heading">
+          <h3>Status</h3>
+          <button id="clear-status-filters" class="text-button" type="button">All</button>
+        </div>
+        <div id="status-filters" class="filter-list" aria-label="Status filters">
+          <label class="filter-option"><input type="checkbox" name="status" value="unreviewed" checked> <span>Unreviewed</span></label>
+          <label class="filter-option"><input type="checkbox" name="status" value="reviewed" checked> <span>Reviewed</span></label>
+          <label class="filter-option"><input type="checkbox" name="status" value="overridden" checked> <span>Overridden</span></label>
+          <label class="filter-option"><input type="checkbox" name="status" value="needs-attention" checked> <span>Needs attention</span></label>
+        </div>
+
+        <label for="sort-select">Sort results</label>
+        <select id="sort-select">
+          <option value="name">Name</option>
+          <option value="type_path">Type path</option>
+          <option value="status">Review status</option>
+          <option value="reviewed_at">Review time</option>
+        </select>
+        <button id="clear-filters" type="button">Clear all filters</button>
+        <div id="entry-list" class="entry-list" aria-live="polite"></div>
+      </aside>
+
+      <section class="card editor-card" aria-label="Lore editor">
+        <nav class="tab-list" role="tablist" aria-label="Editor sections">
+          <button id="review-tab" class="tab-button active" type="button" role="tab" aria-selected="true">Review</button>
+          <button id="config-tab" class="tab-button" type="button" role="tab" aria-selected="false">Configuration</button>
+        </nav>
+
+        <div id="review-panel" role="tabpanel">
+          <div class="section-heading editor-heading">
+            <div>
+              <p class="eyebrow">Selected target</p>
+              <h2>Entry editor</h2>
+              <p id="empty-editor">Select a catalog target to begin.</p>
+              <p id="entry-mode" class="metadata"></p>
+            </div>
+            <span id="entry-status" class="status-pill" hidden></span>
+          </div>
+
+          <div id="review-controls" class="review-controls" hidden>
+            <label for="review-notes">Review notes</label>
+            <textarea id="review-notes" rows="2" placeholder="Explain what the next writer should know"></textarea>
+            <div class="button-row">
+              <button id="mark-reviewed-button" type="button">Mark reviewed</button>
+              <button id="flag-attention-button" class="attention-button" type="button">Flag needs attention</button>
+              <button id="clear-review-button" class="secondary-button" type="button">Clear review</button>
+            </div>
+          </div>
+
+          <button id="create-override-button" type="button" hidden>Create override</button>
+          <form id="entry-form" hidden>
+            <label for="entry-name">Name</label>
+            <input id="entry-name" name="name" type="text">
+            <label for="entry-description">Description</label>
+            <textarea id="entry-description" name="description" rows="6"></textarea>
+            <fieldset id="special-desc-editor">
+              <legend>Examine-more description</legend>
+              <label for="entry-special-desc-requirement">Special description requirement</label>
+              <select id="entry-special-desc-requirement" name="special_desc_requirement">
+                <option value="">Leave the requirement unchanged</option>
+                <option value="none">Always show</option>
+                <option value="syndicate">Syndicate affiliation</option>
+                <option value="syndicate_toy">Syndicate toy behavior</option>
+                <option value="mindshield">Mindshield</option>
+                <option value="role">Specific role</option>
+                <option value="job">Specific job</option>
+                <option value="faction">Specific faction</option>
+                <option value="contractor">Contractor or syndicate agent</option>
+              </select>
+              <p class="metadata">Leave blank to inherit the target's current requirement.</p>
+              <label for="entry-special-desc">Special description</label>
+              <textarea id="entry-special-desc" name="special_desc" rows="5" placeholder="Optional information shown by the examine-more system."></textarea>
+            </fieldset>
+
+            <fieldset id="icon-editor">
+              <legend>Icon reference</legend>
+              <label for="icon-field">Icon slot</label>
+              <select id="icon-field">
+                <option value="icon">Main icon</option>
+                <option value="worn_icon">Worn icon</option>
+                <option value="inhand_icon">In-hand icon</option>
+              </select>
+              <div class="icon-preview-grid">
+                <div class="asset-panel">
+                  <h3>Base asset</h3>
+                  <p id="base-icon-reference" class="metadata">No base icon reference.</p>
+                  <img id="icon-base-preview" class="icon-preview" alt="Base icon preview" hidden>
+                </div>
+                <div class="asset-panel">
+                  <h3>Override asset</h3>
+                  <label for="icon-file-input">DMI file path</label>
+                  <input id="icon-file-input" list="icon-file-options" type="search" placeholder="icons/obj/device.dmi" autocomplete="off">
+                  <datalist id="icon-file-options"></datalist>
+                  <label for="icon-state">Icon state</label>
+                  <select id="icon-state"><option value="">Choose an icon state</option></select>
+                  <p id="icon-message" class="metadata">The base reference is previewed automatically.</p>
+                  <img id="icon-override-preview" class="icon-preview" alt="Override icon preview" hidden>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>AutoWiki</legend>
+              <label class="checkbox-label"><input id="wiki-enabled" type="checkbox"> Export this entry to AutoWiki</label>
+              <label for="wiki-slug">Wiki slug</label>
+              <input id="wiki-slug" type="text" pattern="[a-z0-9]+(?:-[a-z0-9]+)*">
+              <label for="wiki-summary">Wiki summary</label>
+              <textarea id="wiki-summary" rows="3"></textarea>
+              <label class="checkbox-label"><input id="wiki-export-icon" type="checkbox"> Export the selected icon</label>
+            </fieldset>
+
+            <fieldset id="override-source-editor" hidden>
+              <legend>Override group</legend>
+              <label for="override-source">Existing entity group</label>
+              <select id="override-source"></select>
+              <label for="new-override-group">Or create a new group file</label>
+              <input id="new-override-group" type="text" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="languages">
+              <p class="metadata">Overrides are stored as individual JSON records in the configured lore-tools content directory.</p>
+            </fieldset>
+
+            <details>
+              <summary>Advanced details</summary>
+              <p id="entry-metadata" class="metadata"></p>
+            </details>
+            <div class="preview-grid">
+              <div><h3>Base text</h3><p id="before-preview"></p><p id="before-description-preview"></p></div>
+              <div><h3>Override text</h3><p id="after-preview"></p><p id="after-description-preview"></p></div>
+            </div>
+            <div id="validation-panel" class="validation-panel" aria-live="polite"></div>
+            <button id="save-button" type="submit">Save and generate</button>
+          </form>
+        </div>
+
+        <div id="configuration-panel" role="tabpanel" hidden>
+          <div class="section-heading editor-heading">
+            <div>
+              <p class="eyebrow">Writer-maintained taxonomy</p>
+              <h2>Configuration</h2>
+              <p class="metadata">Adjust group matching without editing JSON by hand.</p>
+            </div>
+            <button id="config-new-group-button" type="button">New group</button>
+          </div>
+          <div id="config-group-list" class="config-group-list"></div>
+          <form id="group-editor" class="group-editor" hidden>
+            <h3 id="group-editor-title">New group</h3>
+            <label for="new-group-id">Group id</label>
+            <input id="new-group-id" type="text" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="sol-federation">
+            <label for="new-group-label">Group name</label>
+            <input id="new-group-label" type="text" placeholder="Sol Federation">
+            <label for="new-group-color">Color</label>
+            <input id="new-group-color" type="color" value="#9614d0">
+            <label for="new-group-keywords">Keywords, comma-separated</label>
+            <input id="new-group-keywords" type="text" placeholder="sol federation, solfed">
+            <label for="new-group-prefixes">Type-path prefixes, comma-separated</label>
+            <input id="new-group-prefixes" type="text" placeholder="/datum/faction/sol">
+            <div class="button-row">
+              <button id="save-group-button" type="submit">Save group</button>
+              <button id="cancel-group-button" class="secondary-button" type="button">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </section>
+
+    <section class="card tools-card" aria-label="Lore tools">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Repository operations</p>
+          <h2>Tools</h2>
+          <p class="metadata">Run the supported catalog, validation, and generation tools without leaving this page.</p>
+        </div>
+      </div>
+      <div id="tool-list" class="tool-list"></div>
+      <pre id="tool-output" class="tool-output" aria-live="polite"></pre>
+      <p id="tool-log-path" class="metadata"></p>
+      <div class="export-panel">
+        <div class="section-heading">
+          <div>
+            <h3>Game-repository export</h3>
+            <p class="metadata">Prepare outside the game checkout, then apply only to a clean checkout after reviewing the manifest.</p>
+          </div>
+          <button id="prepare-export-button" type="button">Prepare export</button>
+        </div>
+        <label for="export-stage-select">Prepared stage</label>
+        <select id="export-stage-select"><option value="">No prepared stages</option></select>
+        <button id="apply-export-button" class="secondary-button" type="button">Apply selected export</button>
+        <pre id="export-output" class="tool-output" aria-live="polite"></pre>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

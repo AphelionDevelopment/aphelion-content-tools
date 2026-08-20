@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.tmp
+
+tools/lore_editor/stages/*
+!tools/lore_editor/stages/.gitkeep
+tools/lore_editor/logs/

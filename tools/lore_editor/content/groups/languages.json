@@ -1,0 +1,13 @@
+{
+  "color": "#60a5fa",
+  "id": "languages",
+  "keywords": [
+    "language",
+    "tongue",
+    "dialect"
+  ],
+  "label": "Languages",
+  "type_path_prefixes": [
+    "/datum/language"
+  ]
+}

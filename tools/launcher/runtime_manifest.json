@@ -1,0 +1,6 @@
+{
+  "version": "3.13.7",
+  "architecture": "amd64",
+  "installer_url": "https://www.python.org/ftp/python/3.13.7/python-3.13.7-amd64.exe",
+  "signature_subject_contains": "Python Software Foundation"
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AphelionDevelopment/aphelion-lore-tools/schema/review-record.json",
+  "title": "Aphelion lore review",
+  "type": "object",
+  "required": ["id", "type_path", "status", "reviewed_by", "reviewed_at", "notes"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "type_path": {"type": "string", "pattern": "^/"},
+    "status": {"enum": ["reviewed", "needs-attention"]},
+    "reviewed_by": {"type": "string", "minLength": 1},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "notes": {"type": "string"}
+  },
+  "additionalProperties": false
+}

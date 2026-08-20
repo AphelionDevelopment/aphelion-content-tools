@@ -1,0 +1,9 @@
+{
+  "color": "#a78bfa",
+  "id": "races",
+  "keywords": [],
+  "label": "Races and Species",
+  "type_path_prefixes": [
+    "/datum/species"
+  ]
+}

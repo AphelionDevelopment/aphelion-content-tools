@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AphelionDevelopment/aphelion-lore-tools/schema/lore-entry.json",
+  "title": "Aphelion lore override",
+  "type": "object",
+  "required": ["id", "type_path"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "type_path": {"type": "string", "pattern": "^/(?:[A-Za-z0-9_]+)(?:/[A-Za-z0-9_]+)*$"},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "special_desc_requirement": {
+      "type": "string",
+      "enum": ["contractor", "faction", "job", "mindshield", "none", "role", "syndicate", "syndicate_toy"]
+    },
+    "special_desc": {"type": "string"},
+    "icons": {
+      "type": "object",
+      "properties": {
+        "icon": {"$ref": "#/$defs/icon"},
+        "worn_icon": {"$ref": "#/$defs/icon"},
+        "inhand_icon": {"$ref": "#/$defs/icon"}
+      },
+      "additionalProperties": false
+    },
+    "wiki": {
+      "type": "object",
+      "required": ["enabled", "slug", "summary", "export_icon"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "slug": {"type": ["string", "null"], "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "summary": {"type": ["string", "null"]},
+        "export_icon": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "icon": {
+      "type": "object",
+      "required": ["file", "state"],
+      "properties": {
+        "file": {"type": "string", "minLength": 1},
+        "state": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  }
+}
