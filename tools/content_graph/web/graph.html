@@ -5,41 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Content Graph — Aphelion Content Tools</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/graph.css" />
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <p class="eyebrow">Aphelion Content Tools</p>
-      <h1>Content Graph</h1>
-      <p class="subtitle">Modules, master_files overrides, and NOVA/APHELION EDIT markers in the selected game checkout.</p>
-    </header>
+    <div class="page-layout">
+      <aside class="page-sidebar">
+        <header class="hero">
+          <p class="eyebrow">Aphelion Content Tools</p>
+          <h1>Content Graph</h1>
+          <p class="subtitle">Modules, master_files overrides, and NOVA/APHELION EDIT markers in the selected game checkout.</p>
+        </header>
 
-    <nav class="tool-nav" aria-label="Tools">
-      <a class="tool-pill tool-pill-home" href="/">Home</a>
-      <a class="tool-pill" href="/lore-editor">Lore Editor</a>
-      <span class="tool-pill active" aria-current="page">Content Graph</span>
-    </nav>
+        <div class="sidebar-search">
+          <label for="global-search" class="sidebar-search-label">Search</label>
+          <input id="global-search" class="global-search-input" type="search" placeholder="Search catalog entries or pages…">
+          <div class="global-search-results" hidden></div>
+        </div>
 
+        <nav class="tool-nav" aria-label="Tools">
+          <a class="tool-pill tool-pill-home" href="/">Home</a>
+          <a class="tool-pill tool-pill-filemgmt" href="/file-management">File Management</a>
+          <a class="tool-pill" href="/lore-editor">Lore Editor</a>
+          <span class="tool-pill active" aria-current="page">Content Graph</span>
+        </nav>
+      </aside>
+
+      <div class="page-content">
     <section class="card status-bar">
       <div id="graph-status">Loading…</div>
       <div class="button-row">
         <button id="scan-button" type="button">Scan modular content</button>
         <button id="refresh-button" type="button" class="secondary-button">Refresh from cache</button>
+        <a class="secondary-button" href="/modular-debug">Modular Debug…</a>
       </div>
       <pre id="scan-output" class="tool-output" hidden></pre>
     </section>
 
-    <section class="card detail-panel">
-      <h2>Details</h2>
-      <div id="node-detail">
-        <p class="metadata">Click a node to inspect it. Drag a node to reposition it.</p>
-      </div>
-    </section>
-
     <section class="graph-layout">
       <aside class="card explorer-panel">
-        <details class="collapsible-section" open>
+        <details class="collapsible-section">
           <summary>Filters</summary>
           <fieldset>
             <legend>Node kinds</legend>
@@ -61,24 +67,58 @@
             <label class="checkbox-label"><input type="checkbox" data-relation="master_files_mirror" checked /> Master files mirror</label>
             <label class="checkbox-label"><input type="checkbox" data-relation="marker_edit" checked /> Marker edit</label>
             <label class="checkbox-label"><input type="checkbox" data-relation="contains" checked /> Repository structure</label>
+            <label class="checkbox-label" title="A module's code text literally mentions another module's path, e.g. in a comment."><input type="checkbox" data-relation="module_reference" checked /> Module reference</label>
+            <label class="checkbox-label" title="A core file's text literally mentions another core file's path."><input type="checkbox" data-relation="core_reference" checked /> Core file reference</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Connections</legend>
+            <p class="metadata" title="Only nodes whose connection count falls within this range are shown.">Only show nodes with this many connections</p>
+            <div id="degree-filter" class="dual-range" data-min="0" data-max="0" data-value-min="0" data-value-max="0">
+              <div class="dual-range-track"></div>
+              <div class="dual-range-selected"></div>
+              <div class="dual-range-thumb" id="degree-filter-thumb-min" role="slider" tabindex="0" aria-label="Minimum connections"></div>
+              <div class="dual-range-thumb" id="degree-filter-thumb-max" role="slider" tabindex="0" aria-label="Maximum connections"></div>
+            </div>
+            <div class="dual-range-readout">
+              <output id="degree-filter-min-label">0</output>
+              <output id="degree-filter-max-label">0</output>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Ego view</legend>
+            <p class="metadata" title="Ctrl+click (or Cmd+click) a node on the canvas to isolate its connected component, recolored by hop-distance from that node.">Ctrl+click a node to isolate its connected component.</p>
+            <p class="metadata" id="ego-filter-status"></p>
+            <button id="clear-ego-filter-button" type="button" class="secondary-button text-button">Clear ego view</button>
           </fieldset>
         </details>
 
         <h2>Explorer</h2>
         <input id="explorer-filter" type="search" placeholder="Filter files and folders" />
         <div class="button-row">
-          <button id="explorer-reset" type="button" class="secondary-button">Reset to default view</button>
+          <button id="explorer-reset" type="button" class="secondary-button text-button" title="Restore the curated default scope (modules, master_files overrides, core files with markers).">Reset to default</button>
+          <button id="explorer-tick-all" type="button" class="secondary-button text-button" title="Check every file and folder, bringing the entire tracked catalog into the simulation.">Tick all</button>
+          <button id="explorer-untick-all" type="button" class="secondary-button text-button" title="Uncheck every file and folder, clearing the simulation entirely.">Untick all</button>
         </div>
         <p class="metadata" id="scope-summary"></p>
         <div id="explorer-tree" class="explorer-tree" role="tree"></div>
       </aside>
 
+      <div id="explorer-resizer" class="graph-layout-resizer" title="Drag to resize. Double-click to auto-fit to the longest visible name."></div>
+
       <div class="card canvas-panel">
         <div class="canvas-overlay canvas-search-overlay">
           <input id="node-search" type="search" placeholder="Module id, path, or label" />
         </div>
+        <div class="canvas-overlay canvas-detail-overlay">
+          <h2>Details</h2>
+          <div id="node-detail">
+            <p class="metadata">Click a node to inspect it. Drag a node to reposition it.</p>
+          </div>
+        </div>
         <div id="node-tooltip" class="node-tooltip" hidden></div>
-        <canvas id="graph-canvas"></canvas>
+        <div id="graph-container"></div>
       </div>
     </section>
 
@@ -88,33 +128,122 @@
           <h2>Physics</h2>
           <p class="metadata">Live-tune the layout simulation, or regenerate it from scratch.</p>
         </div>
-        <button id="regenerate-layout-button" type="button" class="secondary-button">Regenerate layout</button>
+        <div class="button-row">
+          <button id="regenerate-layout-button" type="button" class="secondary-button">Regenerate layout</button>
+          <button id="reset-physics-button" type="button" class="secondary-button" title="Reset every Physics control below back to its default value.">Reset to defaults</button>
+        </div>
       </div>
       <div class="physics-columns">
         <fieldset>
           <legend>Mode</legend>
-          <label class="checkbox-label"><input type="radio" name="physics-mode" value="auto" checked /> Auto (based on node count)</label>
+          <p class="metadata">Whether the graph keeps moving after it first settles.</p>
+          <label class="checkbox-label"><input type="radio" name="physics-mode" value="auto" checked /> Auto (live under threshold)</label>
           <label class="checkbox-label"><input type="radio" name="physics-mode" value="on" /> On (always live)</label>
-          <label class="checkbox-label"><input type="radio" name="physics-mode" value="off" /> Off (static layout only)</label>
-          <label class="slider-label">Live physics threshold (nodes)
-            <input id="physics-threshold" type="number" min="100" max="10000" step="100" value="1500" />
+          <label class="checkbox-label"><input type="radio" name="physics-mode" value="off" /> Off (freeze after settling)</label>
+          <label class="slider-label">Live threshold (nodes)
+            <input id="physics-threshold" type="number" min="100" max="50000" step="100" value="1500" />
           </label>
         </fieldset>
 
         <fieldset>
-          <legend>Forces</legend>
-          <label class="slider-label">Repel force
-            <input type="range" data-force="repulsion" min="500" max="6000" step="100" value="2600" />
+          <legend>Layout</legend>
+          <label class="checkbox-label" title="Cluster nodes of the same kind (module, master_files override, core file, directory, other file) toward a shared area."><input type="checkbox" id="group-by-kind" checked /> Group by kind</label>
+          <label class="checkbox-label" title="Cluster nodes by owner (Nova/Aphelion), independent of the kind grouping above."><input type="checkbox" id="group-by-owner" checked /> Group by owner</label>
+          <label class="slider-label" title="How strongly nodes are pulled toward their cluster's anchor point.">Group strength
+            <input type="range" data-force="clusterStrength" min="0" max="0.08" step="0.002" value="0.025" />
           </label>
-          <label class="slider-label">Link force
+          <label class="checkbox-label" title="Scale cluster/grid spacing with the active node count instead of a fixed multiplier."><input type="checkbox" id="auto-scale-spacing" checked /> Auto-scale spacing <output id="spacing-readout" class="metadata"></output></label>
+          <label class="slider-label" title="Manual spacing multiplier -- only used when auto-scale spacing is off.">Spacing scale (manual)
+            <input type="range" id="spacing-scale" min="0.5" max="1000" step="0.5" value="1" disabled />
+          </label>
+          <label class="checkbox-label" title="Remove the spacing multiplier's cap entirely -- lets auto-scale grow without bound, and lets the manual slider above be dragged arbitrarily high."><input type="checkbox" id="unlimited-spacing" /> Unlimited spacing</label>
+          <label class="slider-label" title="Where nodes start before physics runs. Auto picks Spiral below, Packed grid above, the large-scope threshold.">Initial seed shape
+            <select id="seed-shape">
+              <option value="auto" selected>Auto</option>
+              <option value="spiral">Spiral</option>
+              <option value="packed">Packed grid</option>
+              <option value="grid">Global grid (ignores clustering)</option>
+              <option value="random">Random scatter</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Focus</legend>
+          <label class="checkbox-label" title="Organize the graph into concentric rings by hop-distance from one node, instead of by kind/owner. Click a node on the canvas to focus it."><input type="checkbox" id="focus-enabled" /> Organize around selected node</label>
+          <label class="slider-label" title="World-unit distance between each ring (each hop away from the focused node).">Ring spacing
+            <input type="range" data-focus="ringSpacing" min="20" max="500" step="10" value="120" />
+          </label>
+          <p class="metadata" id="focus-status"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Forces</legend>
+          <label class="slider-label" title="How strongly every pair of nodes pushes apart from each other.">Repel force
+            <input type="range" data-force="repulsion" min="500" max="12000" step="100" value="2600" />
+          </label>
+          <label class="checkbox-label" title="Scale each node's repel strength by its own connection count, so hub nodes push harder and don't get crowded."><input type="checkbox" data-tuning="chargeByDegree" /> Weight repel by degree</label>
+          <label class="slider-label" title="How much each connection adds to a node's repel weight, when the above is on.">Weight factor
+            <input type="range" data-tuning="chargeByDegreeFactor" min="0" max="1" step="0.05" value="0.15" />
+          </label>
+          <label class="slider-label" title="How strongly a connected pair is pulled toward the link distance below.">Link force
             <input type="range" data-force="springStrength" min="0.002" max="0.08" step="0.002" value="0.02" />
           </label>
-          <label class="slider-label">Link distance
+          <label class="slider-label" title="Resting distance between connected nodes once the link force settles.">Link distance
             <input type="range" data-force="springLength" min="20" max="200" step="5" value="70" />
           </label>
-          <label class="slider-label">Center force
+          <label class="slider-label" title="How strongly the graph as a whole recenters if its connected structure drifts off-origin. A gentle, uniform nudge on everything together -- not an individual pull on each node, so it won't compress branches inward.">Center force
             <input type="range" data-force="center" min="0" max="0.02" step="0.001" value="0.004" />
           </label>
+          <label class="slider-label" title="Extra center pull applied only to nodes with zero connections, so they don't drift away alone with nothing else reeling them in.">Isolated node pull
+            <input type="range" data-force="isolatedPull" min="1" max="15" step="0.5" value="4" />
+          </label>
+          <label class="slider-label" title="Barnes-Hut repel approximation. Higher trades accuracy for speed -- useful on large scopes.">Repel approximation
+            <input type="range" data-tuning="theta" min="0.1" max="1.5" step="0.05" value="0.9" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Collision</legend>
+          <label class="checkbox-label" title="Keep node circles from visually overlapping each other."><input type="checkbox" data-tuning="collideEnabled" checked /> Prevent node overlap</label>
+          <label class="slider-label" title="Extra padding added around each node's own radius for collision purposes.">Collision padding
+            <input type="range" data-tuning="collidePadding" min="0" max="20" step="1" value="2" />
+          </label>
+          <label class="slider-label" title="How forcefully overlap is resolved each tick.">Collision strength
+            <input type="range" data-tuning="collideStrength" min="0" max="1" step="0.05" value="1" />
+          </label>
+          <label class="slider-label" title="Extra collision buffer that grows with a node's connection count, separate from its drawn size -- so low-degree nodes can't crowd or bury a well-connected hub.">Hub collision buffer
+            <input type="range" data-tuning="hubCollisionBuffer" min="0" max="10" step="0.5" value="2" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Motion</legend>
+          <label class="slider-label" title="Simulation friction. Higher settles faster with less momentum (less inertia); lower keeps nodes drifting longer.">Friction (inertia)
+            <input type="range" data-tuning="velocityDecay" min="0.05" max="0.9" step="0.05" value="0.4" />
+          </label>
+          <label class="slider-label" title="How quickly the simulation cools after a regenerate or nudge. Higher settles faster.">Settle speed
+            <input type="range" data-tuning="alphaDecay" min="0.005" max="0.2" step="0.005" value="0.0228" />
+          </label>
+          <label class="slider-label" title="How much a settled, live scope keeps gently adjusting on its own. Higher reads as faster, more energetic ongoing motion; lower reads as an almost-imperceptibly slow drift.">Ambient motion speed
+            <input type="range" data-tuning="ambientAlpha" min="0.005" max="0.3" step="0.005" value="0.02" />
+          </label>
+          <label class="slider-label" title="How hard a shake kicks every node, when you click Jiggle simulation below.">Shake strength
+            <input type="range" data-tuning="jiggleStrength" min="20" max="1000" step="20" value="200" />
+          </label>
+          <button id="jiggle-simulation-button" type="button" class="secondary-button" title="Give every node a random velocity kick and reheat the simulation -- an escape hatch for a layout that's stuck in a lopsided arrangement.">Jiggle simulation</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dragging</legend>
+          <p class="metadata">Only while actively holding and moving a node.</p>
+          <label class="slider-label" title="How much neighboring nodes react each frame while you drag a node.">Drag responsiveness
+            <input type="range" data-drag="temperature" min="0.02" max="0.5" step="0.02" value="0.06" />
+          </label>
+          <label class="slider-label" title="Extra repel strength applied only while dragging, on top of the Repel force above.">Drag repel boost
+            <input type="range" data-drag="repulsionMultiplier" min="1" max="6" step="0.5" value="1" />
+          </label>
+          <label class="checkbox-label" title="Off by default: dragging a node only moves that node. When on, the camera can also pan at the same time."><input type="checkbox" id="allow-pan-while-dragging" /> Allow camera pan while dragging</label>
         </fieldset>
 
         <fieldset>
@@ -124,38 +253,28 @@
       </div>
     </section>
 
-    <section class="card debug-panel">
-      <h2>Debug</h2>
-      <p class="metadata">Answer specific questions about the cached graph directly, by path or module id,
-        instead of hunting for the right node on the canvas. These three lookups query the same cache the
-        graph itself renders from — nothing here re-scans the checkout.</p>
-
-      <label for="debug-core-file">Edits touching a core file (exact path)</label>
-      <p class="metadata">Every marker edge and master_files override that touches the file you enter, resolved or not.</p>
-      <div class="button-row">
-        <input id="debug-core-file" type="search" placeholder="code/modules/shuttle/shuttle.dm" />
-        <button id="debug-core-file-button" type="button" class="secondary-button">Look up edits</button>
       </div>
-
-      <div class="button-row">
-        <button id="debug-missing-readme-button" type="button" class="secondary-button">Modules missing readme.md</button>
-        <button id="debug-unresolved-button" type="button" class="secondary-button">Unresolved markers</button>
-      </div>
-      <p class="metadata">"Modules missing readme.md" lists every module with no documentation file at all.
-        "Unresolved markers" repeats the list below on demand, useful after checking a different core file above.</p>
-
-      <div id="debug-results" class="unresolved-list"></div>
-
-      <h3>Unresolved markers</h3>
-      <p class="metadata">Markers whose module attribution could not be confirmed against a real module
-        directory — most existing markers in Meridian-Rift only carry a free-text reason, not a clean
-        module id, so this list is expected to be long. Expand a marker to review its Git history and
-        associated pull requests, or to correct its label so a future scan attributes it correctly.</p>
-      <div id="unresolved-list" class="unresolved-list"></div>
-    </section>
+    </div>
   </main>
 
   <script src="/shell.js"></script>
+  <!-- Vendored locally (no CDN, no build step). d3-force computes layout positions (Barnes-Hut many-body
+       force, real collision resolution, proven alpha-decay cooling); Sigma.js (WebGL) + graphology own
+       rendering, panning/zooming, and node picking/dragging -- replacing this page's old hand-rolled
+       Canvas2D draw()/camera/hit-test code, which is where every past visual regression lived. Load order
+       matters: graphology and each d3-force file merge their exports into shared globals (`graphology`,
+       `d3`) that sigma.min.js / d3-force.v3.js then read their dependencies back out of. -->
+  <script src="/vendor/graphology.umd.min.js"></script>
+  <script src="/vendor/sigma.min.js"></script>
+  <script src="/vendor/d3-quadtree.v3.js"></script>
+  <script src="/vendor/d3-dispatch.v3.js"></script>
+  <script src="/vendor/d3-timer.v3.js"></script>
+  <script src="/vendor/d3-force.v3.js"></script>
+  <!-- Shared floating-menu positioning (Floating UI, vendored) + the shared "Open in..." component built
+       on it (see webapp/web/open-in-menu.js) -- also used by Lore Editor. Core must load before dom. -->
+  <script src="/floating-ui-core.umd.min.js"></script>
+  <script src="/floating-ui-dom.umd.min.js"></script>
+  <script src="/open-in-menu.js"></script>
   <script src="/graph.js"></script>
 </body>
 </html>

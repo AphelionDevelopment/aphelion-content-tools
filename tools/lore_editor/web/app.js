@@ -9,6 +9,7 @@ const STATUS_LABELS = {
 };
 const REVIEW_API_PATH = '/api/review';
 const REVIEW_PAGE_SIZE = 500;
+const DEFAULT_KEYWORD_SCOPE = ['name', 'description', 'label'];
 
 const state = {
   entries: [],
@@ -36,6 +37,7 @@ const state = {
   activeTab: 'review',
   groupDraftId: null,
   standalone: false,
+  openActionsRequestSerial: 0,
 };
 
 async function requestJson(path, options = {}) {
@@ -81,6 +83,21 @@ function commaSeparatedValues(selector) {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function setKeywordScopeCheckboxes(scope) {
+  const active = new Set(scope);
+  document.querySelectorAll('[data-scope-field]').forEach((input) => {
+    input.checked = active.has(input.dataset.scopeField);
+  });
+}
+
+function readKeywordScopeCheckboxes() {
+  return Array.from(document.querySelectorAll('[data-scope-field]:checked')).map((input) => input.dataset.scopeField);
+}
+
+function keywordScopeSummary(scope) {
+  return (scope && scope.length) ? scope.join(', ') : 'none (keywords never match)';
 }
 
 function renderGroups() {
@@ -146,7 +163,10 @@ function renderConfigGroups() {
     const prefixes = document.createElement('p');
     prefixes.className = 'metadata';
     prefixes.textContent = (group.type_path_prefixes || []).length ? 'Type paths: ' + group.type_path_prefixes.join(', ') : 'Type paths: none';
-    card.append(heading, keywords, prefixes);
+    const scope = document.createElement('p');
+    scope.className = 'metadata';
+    scope.textContent = 'Keyword scope: ' + keywordScopeSummary(group.keyword_scope);
+    card.append(heading, keywords, prefixes, scope);
     list.append(card);
   }
 }
@@ -362,52 +382,54 @@ function setEditorControls() {
   document.querySelector('#create-override-button').hidden = !state.selected || state.selected.has_override || state.editing;
 }
 
-async function openInGithub(repository, path) {
-  const payload = await requestJson('/api/git/github-url?repository=' + encodeURIComponent(repository) + '&path=' + encodeURIComponent(path));
-  if (!payload.url) throw new Error('No GitHub remote is configured for this repository.');
-  window.open(payload.url, '_blank', 'noopener');
+// The "Open in..." menu itself (floating positioning, the three actions) is a shared component -- see
+// webapp/web/open-in-menu.js -- used here and by Content Graph, instead of two separately-broken
+// reimplementations (this file's old always-visible three-button row; Content Graph's old dropdown that
+// forced its scrolling panel to grow).
+function renderOpenActionsRow(label, repository, path, line) {
+  const row = document.createElement('div');
+  row.className = 'open-actions-row';
+  const heading = document.createElement('span');
+  heading.className = 'metadata';
+  heading.textContent = label + (line ? ' (line ' + line + ')' : '') + ':';
+  row.append(heading);
+  window.AphelionOpenInMenu.render(row, {repository, path, line, onError: (message) => setText('#status-message', message)});
+  return row;
 }
 
-async function openInEditor(repository, path) {
-  await requestJson('/api/git/open-file', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({repository, path, target: 'editor'}),
-  });
-}
-
-async function revealInExplorer(repository, path) {
-  await requestJson('/api/git/open-file', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({repository, path, target: 'explorer'}),
-  });
-}
-
-function renderEntryOpenActions(entry) {
+async function renderEntryOpenActions(entry) {
   const container = document.querySelector('#entry-open-actions');
   container.replaceChildren();
-  if (!entry.has_override || !entry.source_file) return;
-  const path = entry.source_file;
-  const explorerButton = document.createElement('button');
-  explorerButton.type = 'button';
-  explorerButton.className = 'secondary-button';
-  explorerButton.textContent = 'Show in Explorer';
-  explorerButton.addEventListener('click', () => revealInExplorer('tool', path).catch((error) => setText('#status-message', error.message)));
+  const requestSerial = ++state.openActionsRequestSerial;
 
-  const editorButton = document.createElement('button');
-  editorButton.type = 'button';
-  editorButton.className = 'secondary-button';
-  editorButton.textContent = 'Open in editor';
-  editorButton.addEventListener('click', () => openInEditor('tool', path).catch((error) => setText('#status-message', error.message)));
+  const originalRow = document.createElement('div');
+  originalRow.className = 'open-actions-group';
+  const originalLabel = document.createElement('p');
+  originalLabel.className = 'metadata';
+  originalLabel.textContent = 'Looking up the original DM source…';
+  originalRow.append(originalLabel);
+  container.append(originalRow);
 
-  const githubButton = document.createElement('button');
-  githubButton.type = 'button';
-  githubButton.className = 'secondary-button';
-  githubButton.textContent = 'Open on GitHub';
-  githubButton.addEventListener('click', () => openInGithub('tool', path).catch((error) => setText('#status-message', error.message)));
+  if (entry.has_override && entry.source_file) {
+    const overrideGroup = document.createElement('div');
+    overrideGroup.className = 'open-actions-group';
+    overrideGroup.append(renderOpenActionsRow('Open override in', 'tool', entry.source_file));
+    container.append(overrideGroup);
+  }
 
-  container.append(explorerButton, editorButton, githubButton);
+  if (!entry.type_path) return;
+  try {
+    const definition = await requestJson('/api/lore/definition?type_path=' + encodeURIComponent(entry.type_path));
+    if (requestSerial !== state.openActionsRequestSerial) return;
+    if (definition.path) {
+      originalRow.replaceChildren(renderOpenActionsRow('Open original in', 'game', definition.path, definition.line));
+    } else {
+      originalLabel.textContent = 'Could not find this type\'s definition in the game checkout.';
+    }
+  } catch (error) {
+    if (requestSerial !== state.openActionsRequestSerial) return;
+    originalLabel.textContent = error.message;
+  }
 }
 
 function selectEntry(entry) {
@@ -577,6 +599,7 @@ function startNewGroup() {
   document.querySelector('#new-group-id').disabled = false;
   for (const selector of ['#new-group-id', '#new-group-label', '#new-group-keywords', '#new-group-prefixes']) document.querySelector(selector).value = '';
   document.querySelector('#new-group-color').value = '#9614d0';
+  setKeywordScopeCheckboxes(DEFAULT_KEYWORD_SCOPE);
   document.querySelector('#new-group-id').focus();
 }
 
@@ -592,6 +615,7 @@ function editGroup(groupId) {
   document.querySelector('#new-group-color').value = group.color;
   document.querySelector('#new-group-keywords').value = (group.keywords || []).join(', ');
   document.querySelector('#new-group-prefixes').value = (group.type_path_prefixes || []).join(', ');
+  setKeywordScopeCheckboxes(group.keyword_scope || DEFAULT_KEYWORD_SCOPE);
   document.querySelector('#new-group-label').focus();
 }
 
@@ -604,18 +628,35 @@ async function saveGroup(event) {
     color: document.querySelector('#new-group-color').value.trim(),
     keywords: commaSeparatedValues('#new-group-keywords'),
     type_path_prefixes: commaSeparatedValues('#new-group-prefixes'),
+    keyword_scope: readKeywordScopeCheckboxes(),
   };
-  const path = state.groupDraftId ? '/api/groups/' + encodeURIComponent(state.groupDraftId) : '/api/groups';
-  await requestJson(path, {
-    method: state.groupDraftId ? 'PUT' : 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload),
-  });
-  document.querySelector('#group-editor').hidden = true;
-  state.groupDraftId = null;
-  await loadGroupsData();
-  await loadReviewEntries();
-  setText('#status-message', 'Group configuration saved.');
+  const saveButton = document.querySelector('#save-group-button');
+  saveButton.disabled = true;
+  try {
+    const path = state.groupDraftId ? '/api/groups/' + encodeURIComponent(state.groupDraftId) : '/api/groups';
+    const response = await requestJson(path, {
+      method: state.groupDraftId ? 'PUT' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    document.querySelector('#group-editor').hidden = true;
+    state.groupDraftId = null;
+    // Re-render immediately from the server's echoed response (label/color/keywords/scope, but not yet
+    // this group's match count -- that needs the full reclassification loadGroupsData() below performs)
+    // so the swatch and text update the instant the save succeeds, rather than only after the slower
+    // full-corpus reclassification finishes.
+    const savedGroup = response.group || payload;
+    const existingIndex = state.groups.findIndex((candidate) => candidate.id === savedGroup.id);
+    if (existingIndex >= 0) state.groups[existingIndex] = {...state.groups[existingIndex], ...savedGroup};
+    else state.groups.push(savedGroup);
+    renderGroups();
+    renderConfigGroups();
+    setText('#status-message', 'Group configuration saved.');
+    await loadGroupsData();
+    await loadReviewEntries();
+  } finally {
+    saveButton.disabled = false;
+  }
 }
 
 async function saveReview(status) {
@@ -721,6 +762,11 @@ function attachEditorEvents() {
   document.querySelector('#config-new-group-button').addEventListener('click', startNewGroup);
   document.querySelector('#cancel-group-button').addEventListener('click', () => { document.querySelector('#group-editor').hidden = true; state.groupDraftId = null; });
   document.querySelector('#group-editor').addEventListener('submit', (event) => saveGroup(event).catch((error) => setText('#status-message', error.message)));
+  document.querySelector('#select-all-group-filters').addEventListener('click', () => {
+    state.filters.groups = new Set(state.groups.map((group) => group.id));
+    renderGroups();
+    loadReviewEntries().catch((error) => setText('#status-message', error.message));
+  });
   document.querySelector('#clear-group-filters').addEventListener('click', () => {
     state.filters.groups.clear();
     renderGroups();
@@ -815,9 +861,31 @@ function showServerLaunchMessage() {
   document.querySelector('#search').disabled = true;
 }
 
+async function selectEntryByTypePath(typePath, query) {
+  document.querySelector('#search').value = query || '';
+  state.filters.query = query || '';
+  state.filters.groups.clear();
+  state.filters.statuses = new Set(Object.keys(STATUS_LABELS));
+  document.querySelectorAll('#status-filters input[name="status"]').forEach((input) => { input.checked = true; });
+  renderGroups();
+  const payload = await loadReviewEntries();
+  const match = (payload.entries || []).find((entry) => entry.type_path === typePath);
+  if (match) {
+    setActiveTab('review');
+    selectEntry(match);
+  } else {
+    setText('#status-message', 'Could not find that entry — it may be filtered out or no longer exist.');
+  }
+}
+
 if (typeof window !== 'undefined') {
   if (window.location.protocol === 'file:') showServerLaunchMessage();
   else initializeEditor();
+
+  window.addEventListener('aphelion:search-select-entry', (event) => {
+    if (!event.detail || !event.detail.typePath) return;
+    selectEntryByTypePath(event.detail.typePath, event.detail.query).catch((error) => setText('#status-message', error.message));
+  });
 }
 
 if (typeof module !== 'undefined' && module.exports) {

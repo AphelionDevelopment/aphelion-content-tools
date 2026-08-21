@@ -146,6 +146,21 @@ class ExportTests(unittest.TestCase):
 				apply_export(prepared.directory, game_root)
 			self.assertEqual(before, artifact.read_bytes())
 
+	def test_apply_export_allow_dirty_overrides_the_uncommitted_changes_block(self) -> None:
+		with TemporaryDirectory() as temporary_directory:
+			root = Path(temporary_directory)
+			tool_root, game_root, stage_root = self.make_prepared_pair(root)
+			artifact = game_root / "modular_aphelion/modules/lore_overhaul/code/generated_lore_overrides.dm"
+
+			prepared = prepare_export(tool_root, game_root, stage_root)
+
+			(game_root / "uncommitted.txt").write_text("pending\n", encoding="utf-8")
+			before = artifact.read_bytes()
+
+			apply_export(prepared.directory, game_root, allow_dirty=True)
+
+			self.assertNotEqual(before, artifact.read_bytes())
+
 	def test_apply_export_refuses_when_game_module_is_missing(self) -> None:
 		with TemporaryDirectory() as temporary_directory:
 			root = Path(temporary_directory)

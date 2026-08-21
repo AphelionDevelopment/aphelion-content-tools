@@ -1,0 +1,19 @@
+/* Shared app chrome (colors, .shell, sidebar/nav/search, typography, cards, buttons, .button-row) lives
+   in webapp/web/styles.css, which this page also loads -- only this page's own additions belong here. */
+
+.debug-panel label { display: block; margin: 0 0 .35rem; color: var(--muted); }
+.debug-panel input[type="search"] { flex: 1; }
+
+.unresolved-list { display: grid; gap: .4rem; max-height: 20rem; overflow: auto; margin-top: .75rem; }
+#unresolved-list { max-height: 40rem; }
+.unresolved-item { padding: .5rem; background: rgba(23, 7, 46, .68); border: 1px solid var(--violet); border-radius: .4rem; font-size: .8rem; }
+.unresolved-item .path { color: var(--plasma); overflow-wrap: anywhere; }
+.unresolved-item .button-row { margin-top: .5rem; }
+
+.marker-history { margin-top: .5rem; display: grid; gap: .5rem; }
+.marker-history-commit { padding: .4rem .5rem; background: rgba(13, 3, 27, .6); border: 1px solid var(--border); border-radius: .35rem; }
+.marker-history-commit pre { max-height: 12rem; font-size: .72rem; }
+.marker-history-commit a { color: var(--plasma); }
+
+.marker-edit { margin-top: .5rem; }
+.marker-edit input[type="text"] { flex: 1; }

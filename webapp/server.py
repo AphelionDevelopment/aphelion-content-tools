@@ -25,7 +25,7 @@ def _query_int(query: dict[str, list[str]], name: str, *, default: int | None = 
 
 
 def _load_api_functions():
-	from tools.lore_editor.api import catalog_response, generate_output, groups_response, icon_files_response, icon_states_response, list_entries_response, list_icon_choices, list_review_response
+	from tools.lore_editor.api import catalog_response, find_type_definition, generate_output, groups_response, icon_files_response, icon_states_response, list_entries_response, list_icon_choices, list_review_response
 	from tools.lore_editor.api import create_entry, list_entity_files, save_group_response, save_review_response
 	from tools.lore_editor.api import save_entry, validate_entries, validate_entry
 	from tools.lore_editor.icon_preview import IconPreviewNotFound, render_icon_preview
@@ -47,6 +47,7 @@ def _load_api_functions():
 		"list_entity_files": list_entity_files,
 		"icon_files_response": icon_files_response,
 		"icon_states_response": icon_states_response,
+		"find_type_definition": find_type_definition,
 	}
 
 
@@ -57,11 +58,13 @@ def _load_git_functions():
 			git_diff,
 			github_blob_url,
 			line_history,
+			list_branches,
 			open_file_in_default_app,
 			open_in_github_desktop,
 			repository_status,
 			reveal_file_in_file_explorer,
 			stage_and_commit,
+			switch_branch,
 		)
 	else:
 		from .git_adapter import (
@@ -69,11 +72,13 @@ def _load_git_functions():
 			git_diff,
 			github_blob_url,
 			line_history,
+			list_branches,
 			open_file_in_default_app,
 			open_in_github_desktop,
 			repository_status,
 			reveal_file_in_file_explorer,
 			stage_and_commit,
+			switch_branch,
 		)
 	return {
 		"create_branch": create_branch,
@@ -85,6 +90,8 @@ def _load_git_functions():
 		"open_file_in_default_app": open_file_in_default_app,
 		"reveal_file_in_file_explorer": reveal_file_in_file_explorer,
 		"line_history": line_history,
+		"list_branches": list_branches,
+		"switch_branch": switch_branch,
 	}
 
 
@@ -209,17 +216,29 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 		if parsed.path == "/":
 			self.serve_static("index.html", "text/html; charset=utf-8")
 			return
-		if parsed.path == "/app.js":
-			self.serve_static("app.js", "text/javascript; charset=utf-8")
-			return
 		if parsed.path == "/shell.js":
 			self.serve_static("shell.js", "text/javascript; charset=utf-8")
+			return
+		if parsed.path == "/open-in-menu.js":
+			self.serve_static("open-in-menu.js", "text/javascript; charset=utf-8")
+			return
+		if parsed.path in {"/floating-ui-core.umd.min.js", "/floating-ui-dom.umd.min.js"}:
+			# Vendored locally (no CDN, no build step), same as every other third-party script this app
+			# uses -- shared across tools (Content Graph, Lore Editor), so served bare at the webapp root
+			# rather than under Content Graph's own /vendor/ prefix route.
+			self.serve_static("vendor/" + parsed.path.lstrip("/"), "text/javascript; charset=utf-8")
 			return
 		if parsed.path == "/styles.css":
 			self.serve_static("styles.css", "text/css; charset=utf-8")
 			return
 		if parsed.path in {"/favicon.svg", "/favicon.ico"}:
 			self.serve_static("favicon.svg", "image/svg+xml")
+			return
+		if parsed.path == "/file-management":
+			self.serve_static("file-management.html", "text/html; charset=utf-8")
+			return
+		if parsed.path == "/file-management.js":
+			self.serve_static("file-management.js", "text/javascript; charset=utf-8")
 			return
 		if parsed.path == "/graph":
 			self.serve_tool_static("tools/content_graph/web", "graph.html", "text/html; charset=utf-8")
@@ -229,6 +248,21 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			return
 		if parsed.path == "/graph.css":
 			self.serve_tool_static("tools/content_graph/web", "graph.css", "text/css; charset=utf-8")
+			return
+		if parsed.path == "/modular-debug":
+			self.serve_tool_static("tools/content_graph/web", "modular-debug.html", "text/html; charset=utf-8")
+			return
+		if parsed.path == "/modular-debug.js":
+			self.serve_tool_static("tools/content_graph/web", "modular-debug.js", "text/javascript; charset=utf-8")
+			return
+		if parsed.path == "/modular-debug.css":
+			self.serve_tool_static("tools/content_graph/web", "modular-debug.css", "text/css; charset=utf-8")
+			return
+		if parsed.path.startswith("/vendor/") and parsed.path.endswith(".js"):
+			# Vendored third-party scripts (d3-force + its three dependencies, plus graphology and
+			# Sigma.js for WebGL rendering) that Content Graph's graph.html loads directly -- no CDN, no
+			# build step, just static files.
+			self.serve_tool_static("tools/content_graph/web", parsed.path[1:], "text/javascript; charset=utf-8")
 			return
 		if parsed.path == "/lore-editor":
 			self.serve_tool_static("tools/lore_editor/web", "index.html", "text/html; charset=utf-8")
@@ -246,6 +280,15 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				_repository_status = _load_git_functions()["repository_status"]
 				status = _repository_status(self.repository_root(repository_name))
 				self.send_json(asdict(status) | {"conflicted": status.conflicted})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/git/branches":
+			try:
+				query = parse_qs(parsed.query)
+				repository_name = query.get("repository", ["tool"])[0]
+				_list_branches = _load_git_functions()["list_branches"]
+				self.send_json({"repository": repository_name, "branches": _list_branches(self.repository_root(repository_name))})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
@@ -426,6 +469,18 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return
+		if parsed.path == "/api/lore/definition":
+			try:
+				query = parse_qs(parsed.query)
+				type_path = query.get("type_path", [""])[0]
+				if not type_path:
+					raise ValueError("Query parameter 'type_path' is required.")
+				_find_type_definition = _load_api_functions()["find_type_definition"]
+				definition = _find_type_definition(self.server.game_repo_root, type_path)
+				self.send_json({"path": definition["path"] if definition else None, "line": definition["line"] if definition else None})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
 		if parsed.path == "/api/entity-files":
 			try:
 				list_entity_files = _load_api_functions()["list_entity_files"]
@@ -546,12 +601,16 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				payload = self.read_json_body()
 				if not isinstance(payload, dict) or not isinstance(payload.get("stage"), str):
 					raise ValueError("Export application requires a string stage.")
+				force = payload.get("force", False)
+				if not isinstance(force, bool):
+					raise ValueError("Export application 'force' must be a boolean when provided.")
 				_export_functions = _load_export_functions()
 				_prepare_export = _export_functions["prepare_export"]
 				_apply_export = _export_functions["apply_export"]
 				artifact_path = _apply_export(
 					self.export_stage_path(payload["stage"]),
 					self.server.game_repo_root,
+					allow_dirty=force,
 				)
 				opened_in_github_desktop = False
 				github_desktop_error = None
@@ -610,6 +669,20 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				_open_desktop = _load_git_functions()["open_in_github_desktop"]
 				_open_desktop(self.repository_root(repository_name))
 				self.send_json({"repository": repository_name, "opened": True})
+			except (OSError, ValueError) as exc:
+				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+			return
+		if parsed.path == "/api/git/switch-branch":
+			try:
+				payload = self.read_json_body()
+				if not isinstance(payload, dict) or not isinstance(payload.get("name"), str):
+					raise ValueError("Switch-branch request requires a string name.")
+				repository_name = payload.get("repository", "tool")
+				if not isinstance(repository_name, str):
+					raise ValueError("Switch-branch request repository must be a string.")
+				_switch_branch = _load_git_functions()["switch_branch"]
+				_switch_branch(self.repository_root(repository_name), payload["name"])
+				self.send_json({"repository": repository_name, "branch": payload["name"]})
 			except (OSError, ValueError) as exc:
 				self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 			return

@@ -9,74 +9,53 @@
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <p class="eyebrow">Aphelion Content Tools</p>
-      <h1>Home</h1>
-      <p>Repository status, local Git actions, and cache/storage management shared across every tool.</p>
-    </header>
+    <div class="page-layout">
+      <aside class="page-sidebar">
+        <header class="hero">
+          <p class="eyebrow">Aphelion Content Tools</p>
+          <h1>Home</h1>
+          <p>A local toolkit for authoring and maintaining Meridian-Rift's modular content.</p>
+        </header>
 
-    <nav class="tool-nav" aria-label="Tools">
-      <span class="tool-pill tool-pill-home active" aria-current="page">Home</span>
-      <a class="tool-pill" href="/lore-editor">Lore Editor</a>
-      <a class="tool-pill" href="/graph">Content Graph</a>
-    </nav>
-
-    <section class="card repository-card" aria-label="Repository workflow">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Local Git workflow</p>
-          <h2>Repositories</h2>
-          <p class="metadata">The app can make local commits and open GitHub Desktop. Pushes, pull requests, and complex merges stay in GitHub Desktop.</p>
+        <div class="sidebar-search">
+          <label for="global-search" class="sidebar-search-label">Search</label>
+          <input id="global-search" class="global-search-input" type="search" placeholder="Search catalog entries or pages…">
+          <div class="global-search-results" hidden></div>
         </div>
-        <button id="refresh-repository-status" class="secondary-button" type="button">Refresh status</button>
-      </div>
-      <div id="repository-status-list" class="repository-status-list"></div>
-      <div class="workflow-controls">
-        <label for="git-repository">Repository</label>
-        <select id="git-repository">
-          <option value="tool">Aphelion Content Tools</option>
-          <option value="game">Meridian-Rift</option>
-        </select>
-        <label for="git-branch-name">New local branch</label>
-        <input id="git-branch-name" type="text" placeholder="lore/company-review">
-        <button id="create-branch-button" type="button">Create branch</button>
-        <label for="git-commit-message">Commit message</label>
-        <input id="git-commit-message" type="text" placeholder="Update lore review decisions">
-        <button id="commit-repository-button" type="button">Commit changed files</button>
-        <button id="open-github-desktop-button" class="secondary-button" type="button">Open in GitHub Desktop</button>
-      </div>
-      <p id="repository-message" class="metadata" aria-live="polite"></p>
-    </section>
 
-    <section class="card tools-card" aria-label="Cache and storage management">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Repository operations</p>
-          <h2>Cache and Storage Management</h2>
-          <p class="metadata">Run the supported catalog, validation, generation, and content-graph scan jobs without leaving this page.</p>
-        </div>
-      </div>
-      <div id="tool-list" class="tool-list"></div>
-      <pre id="tool-output" class="tool-output" aria-live="polite"></pre>
-      <p id="tool-log-path" class="metadata"></p>
-    </section>
+        <nav class="tool-nav" aria-label="Tools">
+          <span class="tool-pill tool-pill-home active" aria-current="page">Home</span>
+          <a class="tool-pill tool-pill-filemgmt" href="/file-management">File Management</a>
+          <a class="tool-pill" href="/lore-editor">Lore Editor</a>
+          <a class="tool-pill" href="/graph">Content Graph</a>
+        </nav>
+      </aside>
 
-    <section class="card export-card" aria-label="Game-repository export">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Repository operations</p>
-          <h2>Game-repository export</h2>
-          <p class="metadata">Prepare outside the game checkout, then apply only to a clean checkout after reviewing the manifest.</p>
-        </div>
-        <button id="prepare-export-button" type="button">Prepare export</button>
+      <div class="page-content">
+        <section class="card about-card" aria-label="About">
+          <p class="eyebrow">About</p>
+          <h2>Aphelion Content Tools</h2>
+          <p>
+            A growing suite of local tools for working on the Meridian-Rift SS13 fork: reviewing and
+            overriding lore content, exploring how modules connect to the rest of the checkout, and keeping
+            the game repository's Git workflow in one place.
+          </p>
+          <ul class="about-tool-list">
+            <li><strong>File Management</strong> — repository status, Git actions, game-repository export, and cache/storage jobs.</li>
+            <li><strong>Lore Editor</strong> — review catalog content and maintain lore overrides.</li>
+            <li><strong>Content Graph</strong> — visualize modules, master_files overrides, and edit markers.</li>
+          </ul>
+          <p class="metadata">This page is a placeholder — more will land here later.</p>
+        </section>
+
+        <section class="card" aria-label="Aphelion Content Tools Settings">
+          <p class="eyebrow">Configuration</p>
+          <h2>Aphelion Content Tools Settings</h2>
+          <p class="metadata">App-wide settings will live here in a future update.</p>
+        </section>
       </div>
-      <label for="export-stage-select">Prepared stage</label>
-      <select id="export-stage-select"><option value="">No prepared stages</option></select>
-      <button id="apply-export-button" class="secondary-button" type="button">Apply selected export</button>
-      <pre id="export-output" class="tool-output" aria-live="polite"></pre>
-    </section>
+    </div>
   </main>
   <script src="/shell.js"></script>
-  <script src="/app.js"></script>
 </body>
 </html>

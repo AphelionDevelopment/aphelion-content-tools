@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Modular Debug — Aphelion Content Tools</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/modular-debug.css" />
+</head>
+<body>
+  <main class="shell">
+    <div class="page-layout">
+      <aside class="page-sidebar">
+        <header class="hero">
+          <p class="eyebrow"><a href="/graph">← Content Graph</a></p>
+          <h1>Modular Debug</h1>
+          <p class="subtitle">Query the cached content graph directly by path or module id, and review/fix unresolved NOVA/APHELION EDIT markers.</p>
+        </header>
+
+        <div class="sidebar-search">
+          <label for="global-search" class="sidebar-search-label">Search</label>
+          <input id="global-search" class="global-search-input" type="search" placeholder="Search catalog entries or pages…">
+          <div class="global-search-results" hidden></div>
+        </div>
+
+        <nav class="tool-nav" aria-label="Tools">
+          <a class="tool-pill tool-pill-home" href="/">Home</a>
+          <a class="tool-pill tool-pill-filemgmt" href="/file-management">File Management</a>
+          <a class="tool-pill" href="/lore-editor">Lore Editor</a>
+          <a class="tool-pill active" href="/graph" aria-current="page">Content Graph</a>
+        </nav>
+      </aside>
+
+      <div class="page-content">
+        <section class="card status-bar">
+          <div id="debug-status">Loading…</div>
+        </section>
+
+        <section class="card debug-panel">
+          <h2>Core file lookup</h2>
+          <label for="debug-core-file">Edits touching a core file (exact path)</label>
+          <p class="metadata">Every marker edge and master_files override that touches the file you enter, resolved or not.</p>
+          <div class="button-row">
+            <input id="debug-core-file" type="search" placeholder="code/modules/shuttle/shuttle.dm" />
+            <button id="debug-core-file-button" type="button" class="secondary-button">Look up edits</button>
+          </div>
+          <div id="debug-results" class="unresolved-list"></div>
+        </section>
+
+        <section class="card debug-panel">
+          <h2>Modules missing readme.md</h2>
+          <p class="metadata">Every module with no documentation file at all.</p>
+          <div class="button-row">
+            <button id="debug-missing-readme-button" type="button" class="secondary-button">Check modules</button>
+          </div>
+          <div id="missing-readme-results" class="unresolved-list"></div>
+        </section>
+
+        <section class="card debug-panel">
+          <h2>Unresolved markers</h2>
+          <p class="metadata">Markers whose module attribution could not be confirmed against a real module
+            directory — most existing markers in Meridian-Rift only carry a free-text reason, not a clean
+            module id, so this list is expected to be long. Expand a marker to review its Git history and
+            associated pull requests, or to correct its label so a future scan attributes it correctly.</p>
+          <div id="unresolved-list" class="unresolved-list"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="/shell.js"></script>
+  <script src="/modular-debug.js"></script>
+</body>
+</html>

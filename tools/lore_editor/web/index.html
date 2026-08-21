@@ -9,18 +9,29 @@
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <p class="eyebrow">Aphelion Content Tools</p>
-      <h1>Lore Editor</h1>
-      <p>Review catalog content, organize it into writer groups, and maintain overrides without editing DM.</p>
-    </header>
+    <div class="page-layout">
+      <aside class="page-sidebar">
+        <header class="hero">
+          <p class="eyebrow">Aphelion Content Tools</p>
+          <h1>Lore Editor</h1>
+          <p>Review catalog content, organize it into writer groups, and maintain overrides without editing DM.</p>
+        </header>
 
-    <nav class="tool-nav" aria-label="Tools">
-      <a class="tool-pill tool-pill-home" href="/">Home</a>
-      <span class="tool-pill active" aria-current="page">Lore Editor</span>
-      <a class="tool-pill" href="/graph">Content Graph</a>
-    </nav>
+        <div class="sidebar-search">
+          <label for="global-search" class="sidebar-search-label">Search</label>
+          <input id="global-search" class="global-search-input" type="search" placeholder="Search catalog entries or pages…">
+          <div class="global-search-results" hidden></div>
+        </div>
 
+        <nav class="tool-nav" aria-label="Tools">
+          <a class="tool-pill tool-pill-home" href="/">Home</a>
+          <a class="tool-pill tool-pill-filemgmt" href="/file-management">File Management</a>
+          <span class="tool-pill active" aria-current="page">Lore Editor</span>
+          <a class="tool-pill" href="/graph">Content Graph</a>
+        </nav>
+      </aside>
+
+      <div class="page-content">
     <section class="card status-card" aria-label="Content status">
       <div class="status-summary">
         <p class="eyebrow">Workspace status</p>
@@ -50,6 +61,7 @@
           <h3>Groups</h3>
           <div class="button-row">
             <button id="create-group-button" class="text-button" type="button">New group</button>
+            <button id="select-all-group-filters" class="text-button" type="button">Select all</button>
             <button id="clear-group-filters" class="text-button" type="button">Clear</button>
           </div>
         </div>
@@ -216,6 +228,17 @@
             <input id="new-group-color" type="color" value="#9614d0">
             <label for="new-group-keywords">Keywords, comma-separated</label>
             <input id="new-group-keywords" type="text" placeholder="sol federation, solfed">
+            <fieldset class="compact-fieldset">
+              <legend>Keyword search scope</legend>
+              <p class="metadata">Which fields the keywords above are matched against. Type path and parent
+                type are off by default — a keyword like a faction name often shows up inside unrelated type
+                paths, which over-matches. Use Type-path prefixes below for path-based matching instead.</p>
+              <label class="checkbox-label"><input type="checkbox" data-scope-field="name" checked> Name</label>
+              <label class="checkbox-label"><input type="checkbox" data-scope-field="description" checked> Description</label>
+              <label class="checkbox-label"><input type="checkbox" data-scope-field="label" checked> Label</label>
+              <label class="checkbox-label"><input type="checkbox" data-scope-field="type_path"> Type path</label>
+              <label class="checkbox-label"><input type="checkbox" data-scope-field="parent_type"> Parent type</label>
+            </fieldset>
             <label for="new-group-prefixes">Type-path prefixes, comma-separated</label>
             <input id="new-group-prefixes" type="text" placeholder="/datum/faction/sol">
             <div class="button-row">
@@ -226,8 +249,15 @@
         </div>
       </section>
     </section>
+      </div>
+    </div>
   </main>
   <script src="/shell.js"></script>
+  <!-- Shared floating-menu positioning (Floating UI, vendored) + the shared "Open in..." component built
+       on it (see webapp/web/open-in-menu.js) -- also used by Content Graph. Core must load before dom. -->
+  <script src="/floating-ui-core.umd.min.js"></script>
+  <script src="/floating-ui-dom.umd.min.js"></script>
+  <script src="/open-in-menu.js"></script>
   <script src="/lore-editor.js"></script>
 </body>
 </html>

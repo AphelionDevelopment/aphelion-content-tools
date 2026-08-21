@@ -55,6 +55,21 @@ class StandaloneServerTests(unittest.TestCase):
 				)
 				with urlopen(request) as response:
 					self.assertEqual("lore/example", json.loads(response.read())["branch"])
+
+				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/git/branches?repository=tool") as response:
+					branches_payload = json.loads(response.read())
+				self.assertEqual(["lore/example", "main"], branches_payload["branches"])
+
+				switch_request = Request(
+					f"http://127.0.0.1:{server.server_address[1]}/api/git/switch-branch",
+					data=json.dumps({"repository": "tool", "name": "main"}).encode("utf-8"),
+					method="POST",
+					headers={"Content-Type": "application/json"},
+				)
+				with urlopen(switch_request) as response:
+					self.assertEqual("main", json.loads(response.read())["branch"])
+				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/git/status?repository=tool") as response:
+					self.assertEqual("main", json.loads(response.read())["branch"])
 			finally:
 				server.shutdown()
 				server.server_close()
@@ -147,6 +162,36 @@ class StandaloneServerTests(unittest.TestCase):
 				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/icon-files") as response:
 					payload = json.loads(response.read())
 				self.assertEqual(["icons/radio.dmi"], payload["files"])
+			finally:
+				server.shutdown()
+				server.server_close()
+				thread.join(timeout=2)
+
+	def test_server_exposes_the_lore_definition_lookup_endpoint(self) -> None:
+		with TemporaryDirectory() as temporary_directory:
+			root = Path(temporary_directory)
+			tool_root = root / "tool"
+			game_root = root / "game"
+			(tool_root / "tools/lore_editor/catalog").mkdir(parents=True)
+			(game_root / "code").mkdir(parents=True)
+			(game_root / "code" / "items.dm").write_text("/obj/item/radio\n\tname = \"radio\"\n", encoding="utf-8")
+			run_git(game_root, "init", "--initial-branch=main")
+			run_git(game_root, "config", "user.name", "Writer")
+			run_git(game_root, "config", "user.email", "writer@example.invalid")
+			run_git(game_root, "add", "--all")
+			run_git(game_root, "commit", "-m", "Initial")
+
+			server = create_server(tool_root, 0, game_repo_root=game_root)
+			thread = threading.Thread(target=server.serve_forever, daemon=True)
+			thread.start()
+			try:
+				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/lore/definition?type_path=/obj/item/radio") as response:
+					payload = json.loads(response.read())
+				self.assertEqual({"path": "code/items.dm", "line": 1}, payload)
+
+				with urlopen(f"http://127.0.0.1:{server.server_address[1]}/api/lore/definition?type_path=/obj/item/nonexistent") as response:
+					missing_payload = json.loads(response.read())
+				self.assertEqual({"path": None, "line": None}, missing_payload)
 			finally:
 				server.shutdown()
 				server.server_close()
@@ -392,6 +437,7 @@ class StandaloneServerTests(unittest.TestCase):
 					apply.assert_called_once_with(
 						(tool_root / "tools/lore_editor/stages/example").resolve(),
 						game_root.resolve(),
+						allow_dirty=False,
 					)
 					self.assertFalse(apply_payload["opened_in_github_desktop"])
 					self.assertIsNotNone(apply_payload["github_desktop_error"])

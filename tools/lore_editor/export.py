@@ -155,8 +155,14 @@ def _load_prepared_manifest(stage_directory: Path) -> ExportManifest:
 	return ExportManifest.from_dict(payload)
 
 
-def apply_export(stage_directory: Path, game_repo_root: Path) -> Path:
-	"""Apply a prepared artifact only when the recorded clean-game checks still hold."""
+def apply_export(stage_directory: Path, game_repo_root: Path, *, allow_dirty: bool = False) -> Path:
+	"""Apply a prepared artifact only when the recorded clean-game checks still hold.
+
+	`allow_dirty` lets a caller override the uncommitted-changes block after the user has explicitly
+	confirmed it (the export only ever touches the one generated artifact file, so overwriting it
+	alongside other uncommitted game-repo changes is a deliberate, reviewable choice) -- unresolved Git
+	conflicts remain a hard block regardless, since applying on top of those is never safe.
+	"""
 	resolved_stage_directory = stage_directory.resolve()
 	resolved_game_root = game_repo_root.resolve()
 	validate_game_repository(resolved_game_root)
@@ -171,7 +177,7 @@ def apply_export(stage_directory: Path, game_repo_root: Path) -> Path:
 	status = repository_status(resolved_game_root)
 	if status.conflicted:
 		raise ValueError("The game checkout has unresolved Git conflicts; resolve them in GitHub Desktop first.")
-	if status.dirty:
+	if status.dirty and not allow_dirty:
 		raise ValueError("The game checkout has uncommitted changes; review or commit them in GitHub Desktop before applying an export.")
 	if repository_revision(resolved_game_root) != manifest.game_repo_revision:
 		raise ValueError("The game checkout revision changed after this export was prepared; prepare a new export.")

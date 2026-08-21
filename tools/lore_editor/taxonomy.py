@@ -8,7 +8,15 @@ from pathlib import Path
 import re
 import tempfile
 
-from .model import CatalogTarget, GroupConfig, GroupRecord, ReviewRecord, thaw_json
+from .model import (
+	DEFAULT_KEYWORD_SCOPE,
+	KEYWORD_SCOPE_FIELDS,
+	CatalogTarget,
+	GroupConfig,
+	GroupRecord,
+	ReviewRecord,
+	thaw_json,
+)
 from .workspace import WorkspaceLayout
 
 
@@ -83,12 +91,21 @@ def _group_from_raw(raw_group: object) -> GroupRecord:
 	type_path_prefixes = _string_tuple(raw_group.get("type_path_prefixes"), f"Group '{group_id}' type_path_prefixes")
 	if any(not prefix.startswith("/") for prefix in type_path_prefixes):
 		raise ValueError(f"Group '{group_id}' type_path_prefixes must be absolute type paths.")
+	raw_keyword_scope = raw_group.get("keyword_scope")
+	if raw_keyword_scope is None:
+		keyword_scope = DEFAULT_KEYWORD_SCOPE
+	else:
+		keyword_scope = _string_tuple(raw_keyword_scope, f"Group '{group_id}' keyword_scope")
+		unknown_fields = set(keyword_scope) - set(KEYWORD_SCOPE_FIELDS)
+		if unknown_fields:
+			raise ValueError(f"Group '{group_id}' keyword_scope has unknown field(s): {', '.join(sorted(unknown_fields))}.")
 	return GroupRecord(
 		id=group_id,
 		label=label.strip(),
 		color=color.strip(),
 		keywords=_string_tuple(raw_group.get("keywords"), f"Group '{group_id}' keywords"),
 		type_path_prefixes=type_path_prefixes,
+		keyword_scope=keyword_scope,
 	)
 
 
@@ -99,6 +116,7 @@ def _group_payload(group: GroupRecord) -> dict[str, object]:
 		"color": group.color,
 		"keywords": list(group.keywords),
 		"type_path_prefixes": list(group.type_path_prefixes),
+		"keyword_scope": list(group.keyword_scope),
 	}
 
 
@@ -305,14 +323,24 @@ def _keyword_matches(keyword: str, search_text: str) -> bool:
 	return _keyword_pattern(keyword).search(search_text) is not None
 
 
+_FIELD_DISPLAY_NAMES = {
+	"type_path": "type path",
+	"parent_type": "parent type",
+	"label": "label",
+	"name": "name",
+	"description": "description",
+}
+
+
 def _target_search_fields(target: CatalogTarget) -> dict[str, str]:
+	"""Return this target's searchable text, keyed by the field ids in `KEYWORD_SCOPE_FIELDS`."""
 	raw_target = thaw_json(target.raw_data)
 	if not isinstance(raw_target, dict):
 		return {}
 	base_values = raw_target.get("base_values")
 	search_values = {
-		"type path": raw_target.get("type_path"),
-		"parent type": raw_target.get("parent_type"),
+		"type_path": raw_target.get("type_path"),
+		"parent_type": raw_target.get("parent_type"),
 		"label": raw_target.get("label"),
 		"name": base_values.get("name") if isinstance(base_values, dict) else None,
 		"description": base_values.get("description") if isinstance(base_values, dict) else None,
@@ -342,8 +370,10 @@ def classify_target_details(target: CatalogTarget, groups: GroupConfig) -> dict[
 		for keyword in group.keywords:
 			keyword_pattern = _keyword_pattern(keyword)
 			for field_name, field_value in search_fields.items():
+				if field_name not in group.keyword_scope:
+					continue
 				if keyword_pattern.search(field_value.casefold()):
-					reasons.append(f"keyword '{keyword}' in {field_name}")
+					reasons.append(f"keyword '{keyword}' in {_FIELD_DISPLAY_NAMES.get(field_name, field_name)}")
 		if reasons:
 			classified[group.id] = tuple(reasons)
 	return classified

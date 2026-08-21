@@ -176,6 +176,37 @@ def repository_remote_url(repo_root: Path, remote_name: str = "origin") -> str |
 	return url or None
 
 
+def find_line_in_tracked_files(repo_root: Path, pattern: str, *, glob: str | None = None) -> list[dict[str, object]]:
+	"""Return every (path, line, text) match for an extended-regex `pattern` via `git grep`.
+
+	Anchoring/escaping is the caller's responsibility -- this is a thin, generic wrapper. Used for
+	best-effort source lookups where no dedicated index exists (e.g. locating a DM type's definition
+	line by exact type-path text), so an empty result is a normal "not found," not an error.
+	"""
+	arguments = ["grep", "-n", "-E", pattern]
+	if glob:
+		arguments += ["--", glob]
+	with _repo_lock(repo_root):
+		result = _run_git(repo_root, arguments, allow_nonzero=True)
+	if result.returncode not in (0, 1):
+		message = result.stderr.strip() or result.stdout.strip() or "git grep failed"
+		raise GitAdapterError(_truncate_output(message))
+	matches: list[dict[str, object]] = []
+	for line in result.stdout.splitlines():
+		path, sep1, rest = line.partition(":")
+		if not sep1:
+			continue
+		line_number_text, sep2, text = rest.partition(":")
+		if not sep2:
+			continue
+		try:
+			line_number = int(line_number_text)
+		except ValueError:
+			continue
+		matches.append({"path": path, "line": line_number, "text": text})
+	return matches
+
+
 def list_tracked_files(repo_root: Path) -> tuple[str, ...]:
 	"""Return every Git-tracked file path in the repository, repo-relative and posix-styled, sorted."""
 	with _repo_lock(repo_root):
@@ -184,12 +215,31 @@ def list_tracked_files(repo_root: Path) -> tuple[str, ...]:
 	return tuple(sorted(paths))
 
 
-def create_branch(repo_root: Path, branch_name: str) -> None:
+def _check_branch_name(branch_name: str) -> None:
 	if not branch_name or branch_name.startswith("-") or ".." in branch_name or "//" in branch_name or "@{" in branch_name:
 		raise ValueError("Branch name contains unsafe Git reference syntax.")
+
+
+def create_branch(repo_root: Path, branch_name: str) -> None:
+	_check_branch_name(branch_name)
 	with _repo_lock(repo_root):
 		_run_git(repo_root, ["check-ref-format", "--branch", branch_name])
 		_run_git(repo_root, ["switch", "--create", branch_name])
+
+
+def list_branches(repo_root: Path) -> tuple[str, ...]:
+	"""Return every local branch name, sorted."""
+	with _repo_lock(repo_root):
+		result = _run_git(repo_root, ["branch", "--format=%(refname:short)"])
+	return tuple(sorted(line.strip() for line in result.stdout.splitlines() if line.strip()))
+
+
+def switch_branch(repo_root: Path, branch_name: str) -> None:
+	"""Switch to an existing local branch. Git itself refuses the switch if it would overwrite dirty files."""
+	_check_branch_name(branch_name)
+	with _repo_lock(repo_root):
+		_run_git(repo_root, ["check-ref-format", "--branch", branch_name])
+		_run_git(repo_root, ["switch", branch_name])
 
 
 def _resolve_tracked_path(repo_root: Path, relative_path: str) -> Path:
@@ -258,10 +308,14 @@ def git_diff(repo_root: Path, relative_path: str) -> str:
 
 
 def open_file_in_default_app(repo_root: Path, relative_path: str) -> None:
-	"""Open a repository file with whatever the OS has associated with its file type."""
+	"""Open a repository file or directory with whatever the OS has associated with it.
+
+	Content Graph nodes for modules/master_files overrides/directories point at a directory, not a
+	single file -- os.startfile happily opens a directory in Explorer too, so this isn't file-only.
+	"""
 	resolved_path = _resolve_tracked_path(repo_root, relative_path)
-	if not resolved_path.is_file():
-		raise GitAdapterError(f"File does not exist: {relative_path}")
+	if not resolved_path.exists():
+		raise GitAdapterError(f"Path does not exist: {relative_path}")
 	try:
 		os.startfile(str(resolved_path))  # noqa: S606 -- Windows-only by design, path is repo-root-bounded
 	except OSError as exc:
@@ -269,13 +323,14 @@ def open_file_in_default_app(repo_root: Path, relative_path: str) -> None:
 
 
 def reveal_file_in_file_explorer(repo_root: Path, relative_path: str) -> None:
-	"""Open Windows Explorer with the file pre-selected."""
+	"""Open Windows Explorer, selecting the path if it's a file or opening it directly if it's a directory."""
 	resolved_path = _resolve_tracked_path(repo_root, relative_path)
-	if not resolved_path.is_file():
-		raise GitAdapterError(f"File does not exist: {relative_path}")
+	if not resolved_path.exists():
+		raise GitAdapterError(f"Path does not exist: {relative_path}")
+	command = ["explorer.exe", str(resolved_path)] if resolved_path.is_dir() else ["explorer.exe", "/select,", str(resolved_path)]
 	try:
 		subprocess.Popen(
-			["explorer.exe", "/select,", str(resolved_path)],
+			command,
 			stdin=subprocess.DEVNULL,
 			stdout=subprocess.DEVNULL,
 			stderr=subprocess.DEVNULL,
@@ -298,10 +353,11 @@ def parse_github_remote(remote_url: str) -> tuple[str, str] | None:
 
 
 def github_blob_url(repo_root: Path, relative_path: str) -> str | None:
-	"""Build a github.com blob URL for a repository-relative path at its current revision.
+	"""Build a github.com blob (file) or tree (directory) URL for a repository-relative path.
 
 	Returns None if the repository has no 'origin' remote, or that remote isn't a GitHub URL. Pins to
 	the current revision (not a branch name) so the link never points at code that has since moved on.
+	Uses '/tree/' for directories and '/blob/' for files -- GitHub 404s a directory path under '/blob/'.
 	"""
 	remote_url = repository_remote_url(repo_root)
 	if remote_url is None:
@@ -312,7 +368,9 @@ def github_blob_url(repo_root: Path, relative_path: str) -> str | None:
 	owner, repo = parsed
 	revision = repository_revision(repo_root)
 	posix_path = Path(relative_path).as_posix()
-	return f"https://github.com/{owner}/{repo}/blob/{revision}/{posix_path}"
+	resolved_path = (repo_root.resolve() / Path(relative_path))
+	segment = "tree" if resolved_path.is_dir() else "blob"
+	return f"https://github.com/{owner}/{repo}/{segment}/{revision}/{posix_path}"
 
 
 _PR_SUBJECT_PATTERN = re.compile(r"\(#(\d+)\)\s*$")

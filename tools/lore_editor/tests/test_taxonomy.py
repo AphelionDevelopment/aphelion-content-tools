@@ -169,13 +169,69 @@ class TaxonomyTests(unittest.TestCase):
 			},
 		})
 
+		# "nanotrasen" also appears in the type path, but keyword matching defaults to name/description/label
+		# only (type_path_prefixes is the dedicated, explicit way to match by path) -- see
+		# test_keyword_scope_excludes_type_path_by_default for the regression this guards against.
 		self.assertEqual(classify_target_details(target, groups), {
 			"nanotrasen": (
 				"type path prefix '/obj/item'",
-				"keyword 'nanotrasen' in type path",
 				"keyword 'nanotrasen' in description",
 			),
 		})
+
+	def test_keyword_scope_excludes_type_path_by_default(self) -> None:
+		write_json(self.repo_root / "config/aphelion/lore_overhaul/groups.json", {
+			"groups": [{
+				"id": "nova-sector",
+				"label": "Nova Sector",
+				"color": "#a853d0",
+				"keywords": ["nova"],
+				"type_path_prefixes": [],
+			}],
+			"assignments": {},
+		})
+		groups = load_groups(self.repo_root)
+		unrelated_target = make_catalog_target({
+			"type_path": "/obj/item/clothing/head/nova_helmet",
+			"label": "Helmet",
+			"base_values": {"name": "Helmet", "description": "A standard-issue helmet."},
+		})
+
+		self.assertEqual(classify_target(unrelated_target, groups), ())
+
+	def test_keyword_scope_can_be_widened_to_include_type_path(self) -> None:
+		write_json(self.repo_root / "config/aphelion/lore_overhaul/groups.json", {
+			"groups": [{
+				"id": "nova-sector",
+				"label": "Nova Sector",
+				"color": "#a853d0",
+				"keywords": ["nova"],
+				"type_path_prefixes": [],
+				"keyword_scope": ["type_path"],
+			}],
+			"assignments": {},
+		})
+		groups = load_groups(self.repo_root)
+		target = make_catalog_target({
+			"type_path": "/obj/item/clothing/head/nova_helmet",
+			"label": "Helmet",
+			"base_values": {"name": "Helmet", "description": "A standard-issue helmet."},
+		})
+
+		self.assertEqual(classify_target_details(target, groups), {
+			"nova-sector": ("keyword 'nova' in type path",),
+		})
+
+	def test_keyword_scope_rejects_unknown_fields(self) -> None:
+		with self.assertRaises(ValueError):
+			save_group(self.repo_root, GroupRecord(
+				id="bogus",
+				label="Bogus",
+				color="#fff",
+				keywords=("x",),
+				type_path_prefixes=(),
+				keyword_scope=("not_a_real_field",),
+			))
 
 	def test_reviews_are_independent_from_overrides_and_can_be_cleared(self) -> None:
 		reviews = load_reviews(self.repo_root)

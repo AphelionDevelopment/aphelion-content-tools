@@ -13,7 +13,9 @@ from webapp.git_adapter import (
 	create_branch,
 	git_diff,
 	github_blob_url,
+	find_line_in_tracked_files,
 	line_history,
+	list_branches,
 	list_tracked_files,
 	open_file_in_default_app,
 	open_in_github_desktop,
@@ -22,6 +24,7 @@ from webapp.git_adapter import (
 	repository_status,
 	reveal_file_in_file_explorer,
 	stage_and_commit,
+	switch_branch,
 )
 
 
@@ -192,6 +195,58 @@ class GitAdapterTests(unittest.TestCase):
 		status = repository_status(repo_root)
 		self.assertTrue(status.conflicted)
 		self.assertIn("shared.txt", status.conflict_files)
+
+	def test_find_line_in_tracked_files_locates_an_exact_line_match(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		(repo_root / "code.dm").write_text("/obj/item/foo\n\tname = \"Foo\"\n/obj/item/bar\n", encoding="utf-8", newline="")
+		run_git(repo_root, "add", "code.dm")
+		run_git(repo_root, "commit", "-m", "Add code.dm")
+
+		matches = find_line_in_tracked_files(repo_root, r"^/obj/item/foo$", glob="*.dm")
+
+		self.assertEqual([{"path": "code.dm", "line": 1, "text": "/obj/item/foo"}], matches)
+
+	def test_find_line_in_tracked_files_returns_empty_list_when_nothing_matches(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		matches = find_line_in_tracked_files(repo_root, r"^/obj/item/nonexistent$", glob="*.dm")
+
+		self.assertEqual([], matches)
+
+	def test_list_branches_returns_every_local_branch_sorted(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		create_branch(repo_root, "lore/zeta")
+		create_branch(repo_root, "lore/alpha")
+
+		branches = list_branches(repo_root)
+
+		self.assertEqual(("lore/alpha", "lore/zeta", "main"), branches)
+
+	def test_switch_branch_switches_to_an_existing_branch(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		create_branch(repo_root, "lore/example")
+		switch_branch(repo_root, "main")
+
+		self.assertEqual("main", repository_status(repo_root).branch)
+
+		switch_branch(repo_root, "lore/example")
+
+		self.assertEqual("lore/example", repository_status(repo_root).branch)
+
+	def test_switch_branch_rejects_unsafe_names(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+
+		with self.assertRaises(ValueError):
+			switch_branch(repo_root, "-not-a-flag")
+		with self.assertRaises(ValueError):
+			switch_branch(repo_root, "../unsafe")
 
 	def test_create_branch_rejects_leading_dash_and_reflog_syntax(self) -> None:
 		temporary_directory, repo_root = self.make_repo()
@@ -388,6 +443,16 @@ class GitAdapterTests(unittest.TestCase):
 				open_file_in_default_app(repo_root, "missing.txt")
 		startfile.assert_not_called()
 
+	def test_open_file_in_default_app_accepts_a_directory(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		(repo_root / "a_module").mkdir()
+
+		with patch("webapp.git_adapter.os.startfile", create=True) as startfile:
+			open_file_in_default_app(repo_root, "a_module")
+
+		startfile.assert_called_once_with(str((repo_root / "a_module").resolve()))
+
 	def test_reveal_file_in_file_explorer_launches_explorer_with_select(self) -> None:
 		temporary_directory, repo_root = self.make_repo()
 		self.addCleanup(temporary_directory.cleanup)
@@ -398,6 +463,20 @@ class GitAdapterTests(unittest.TestCase):
 		popen.assert_called_once()
 		self.assertEqual(
 			["explorer.exe", "/select,", str((repo_root / "README.md").resolve())],
+			popen.call_args.args[0],
+		)
+
+	def test_reveal_file_in_file_explorer_opens_a_directory_directly(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		(repo_root / "a_module").mkdir()
+
+		with patch("webapp.git_adapter.subprocess.Popen") as popen:
+			reveal_file_in_file_explorer(repo_root, "a_module")
+
+		popen.assert_called_once()
+		self.assertEqual(
+			["explorer.exe", str((repo_root / "a_module").resolve())],
 			popen.call_args.args[0],
 		)
 
@@ -424,6 +503,17 @@ class GitAdapterTests(unittest.TestCase):
 
 		self.assertEqual(f"https://github.com/AphelionDevelopment/Meridian-Rift/blob/{head}/README.md", url)
 		self.assertEqual("main", status.branch)
+
+	def test_github_blob_url_uses_tree_for_a_directory(self) -> None:
+		temporary_directory, repo_root = self.make_repo()
+		self.addCleanup(temporary_directory.cleanup)
+		run_git(repo_root, "remote", "add", "origin", "https://github.com/AphelionDevelopment/Meridian-Rift.git")
+		(repo_root / "a_module").mkdir()
+		head = run_git_allow_fail(repo_root, "rev-parse", "HEAD").stdout.strip()
+
+		url = github_blob_url(repo_root, "a_module")
+
+		self.assertEqual(f"https://github.com/AphelionDevelopment/Meridian-Rift/tree/{head}/a_module", url)
 
 	def test_line_history_reports_the_commit_that_introduced_the_line(self) -> None:
 		temporary_directory, repo_root = self.make_repo()

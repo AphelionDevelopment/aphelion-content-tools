@@ -12,7 +12,15 @@ from webapp.json_storage import canonical_json_bytes
 from webapp.path_safety import resolve_repo_path
 from .manifest import GraphManifest, sha256_bytes
 from .markers import MarkerEdge
-from .scanner import scan_core_markers, scan_full_tree, scan_master_files, scan_modules
+from .references import find_text_references
+from .scanner import (
+	scan_core_file_texts,
+	scan_core_markers,
+	scan_full_tree,
+	scan_master_files,
+	scan_module_file_texts,
+	scan_modules,
+)
 
 
 GRAPH_INDEX_PATH = Path("tools/content_graph/cache/index.json")
@@ -125,8 +133,12 @@ def build_content_graph(game_repo_root: Path) -> dict[str, object]:
 
 	core_paths = {master_file.core_path for master_file in master_files} | set(markers_by_path.keys())
 
+	module_contents = scan_module_file_texts(resolved_root, modules)
+	core_contents = scan_core_file_texts(resolved_root, frozenset(core_paths))
+
 	nodes: list[dict[str, object]] = []
 	for module in modules:
+		content = module_contents.get(module.path)
 		nodes.append({
 			"id": _module_node_id(module.owner, module.id),
 			"kind": "module",
@@ -134,21 +146,32 @@ def build_content_graph(game_repo_root: Path) -> dict[str, object]:
 			"module_id": module.id,
 			"path": module.path,
 			"has_readme": module.has_readme,
+			"file_count": content.file_count if content else 0,
+			"total_bytes": content.total_bytes if content else 0,
 		})
 	for master_file in master_files:
+		override_path = resolved_root / master_file.path
+		try:
+			size_bytes = override_path.stat().st_size
+		except OSError:
+			size_bytes = None
 		nodes.append({
 			"id": _master_file_node_id(master_file.owner, master_file.path),
 			"kind": "master_file",
 			"owner": master_file.owner,
 			"path": master_file.path,
 			"core_path": master_file.core_path,
+			"size_bytes": size_bytes,
 		})
 	for core_path in sorted(core_paths):
+		content = core_contents.get(core_path)
 		nodes.append({
 			"id": _core_file_node_id(core_path),
 			"kind": "core_file",
 			"path": core_path,
 			"marker_count": len(markers_by_path.get(core_path, ())),
+			"size_bytes": content.size_bytes if content else None,
+			"line_count": content.line_count if content else None,
 		})
 
 	edges: list[dict[str, object]] = []
@@ -158,6 +181,20 @@ def build_content_graph(game_repo_root: Path) -> dict[str, object]:
 			"target": _core_file_node_id(master_file.core_path),
 			"relation": "master_files_mirror",
 		})
+
+	# Best-effort cross-references: a module or core file whose text literally mentions another
+	# module's/core file's path (e.g. a comment referencing "modular_nova/modules/other_module", or one
+	# core file's marker text mentioning another core file) surfaces coupling that the structural edges
+	# above don't capture. This is a textual scan, not real DM/BYOND parsing -- see references.py.
+	module_fragment_ids = {module.path: _module_node_id(module.owner, module.id) for module in modules}
+	module_texts = {path: content.text for path, content in module_contents.items()}
+	for source_id, target_id in find_text_references(module_texts, module_fragment_ids):
+		edges.append({"source": source_id, "target": target_id, "relation": "module_reference"})
+
+	core_fragment_ids = {path: _core_file_node_id(path) for path in core_paths}
+	core_texts = {path: content.text for path, content in core_contents.items()}
+	for source_id, target_id in find_text_references(core_texts, core_fragment_ids):
+		edges.append({"source": source_id, "target": target_id, "relation": "core_reference"})
 
 	unresolved_markers: list[dict[str, object]] = []
 	marker_count = 0
@@ -182,6 +219,8 @@ def build_content_graph(game_repo_root: Path) -> dict[str, object]:
 	tracked_paths = scan_full_tree(resolved_root)
 	directory_count = _add_full_tree(nodes, edges, path_to_id, tracked_paths)
 
+	reference_count = sum(1 for edge in edges if edge["relation"] in ("module_reference", "core_reference"))
+
 	return {
 		"nodes": nodes,
 		"edges": edges,
@@ -194,6 +233,7 @@ def build_content_graph(game_repo_root: Path) -> dict[str, object]:
 			"unresolved_marker_count": len(unresolved_markers),
 			"file_count": len(tracked_paths),
 			"directory_count": directory_count,
+			"reference_count": reference_count,
 		},
 	}
 
@@ -243,6 +283,7 @@ def scan_and_cache_content_graph(repo_root: Path, game_repo_root: Path) -> Graph
 		marker_count=counts["marker_count"],
 		file_count=counts["file_count"],
 		directory_count=counts["directory_count"],
+		reference_count=counts["reference_count"],
 	)
 
 	index_path = resolve_repo_path(resolved_repo_root, GRAPH_INDEX_PATH)

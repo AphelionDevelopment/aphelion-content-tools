@@ -23,7 +23,11 @@ def make_fixture_game_repo(game_root: Path) -> None:
 
 	module_dir = game_root / "modular_nova" / "modules" / "shuttle_toggle" / "code"
 	module_dir.mkdir(parents=True)
-	(module_dir / "shuttle_toggle.dm").write_text("/obj/docking_port/shuttle_toggle\n", encoding="utf-8")
+	(module_dir / "shuttle_toggle.dm").write_text(
+		"/obj/docking_port/shuttle_toggle\n"
+		"// See modular_nova/modules/no_readme_module for related config.\n",
+		encoding="utf-8",
+	)
 	(game_root / "modular_nova" / "modules" / "shuttle_toggle" / "readme.md").write_text("# Shuttle toggle\n", encoding="utf-8")
 
 	# a module with no readme.md
@@ -48,7 +52,8 @@ def make_fixture_game_repo(game_root: Path) -> None:
 	other_core_file.parent.mkdir(parents=True)
 	other_core_file.write_text(
 		"/obj/item/other\n"
-		"\t// NOVA EDIT ADDITION - some future module\n",
+		"\t// NOVA EDIT ADDITION - some future module\n"
+		"\t// Also touches code/modules/shuttle/shuttle.dm\n",
 		encoding="utf-8",
 	)
 
@@ -99,6 +104,30 @@ class ContentGraphScanTests(unittest.TestCase):
 		self.assertEqual(1, graph["counts"]["master_files_count"])
 		self.assertEqual(2, graph["counts"]["marker_count"])
 		self.assertEqual(1, graph["counts"]["unresolved_marker_count"])
+
+		module_reference_edges = [edge for edge in graph["edges"] if edge["relation"] == "module_reference"]
+		self.assertEqual(1, len(module_reference_edges))
+		self.assertEqual("module:nova:shuttle_toggle", module_reference_edges[0]["source"])
+		self.assertEqual("module:nova:no_readme_module", module_reference_edges[0]["target"])
+
+		core_reference_edges = [edge for edge in graph["edges"] if edge["relation"] == "core_reference"]
+		self.assertEqual(1, len(core_reference_edges))
+		self.assertEqual("core_file:code/modules/other/other.dm", core_reference_edges[0]["source"])
+		self.assertEqual("core_file:code/modules/shuttle/shuttle.dm", core_reference_edges[0]["target"])
+
+		self.assertEqual(2, graph["counts"]["reference_count"])
+
+		module_nodes = {node["module_id"]: node for node in graph["nodes"] if node["kind"] == "module"}
+		self.assertEqual(1, module_nodes["shuttle_toggle"]["file_count"])
+		self.assertGreater(module_nodes["shuttle_toggle"]["total_bytes"], 0)
+		self.assertEqual(0, module_nodes["no_readme_module"]["file_count"])
+
+		core_file_nodes = {node["path"]: node for node in graph["nodes"] if node["kind"] == "core_file"}
+		self.assertIsNotNone(core_file_nodes["code/modules/shuttle/shuttle.dm"]["size_bytes"])
+		self.assertGreater(core_file_nodes["code/modules/shuttle/shuttle.dm"]["line_count"], 0)
+
+		master_file_nodes = [node for node in graph["nodes"] if node["kind"] == "master_file"]
+		self.assertIsNotNone(master_file_nodes[0]["size_bytes"])
 
 	def test_full_tree_connects_every_tracked_file_without_duplicating_specialized_nodes(self) -> None:
 		with tempfile.TemporaryDirectory() as temp_dir:

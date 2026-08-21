@@ -13,42 +13,79 @@
   --border: #6c278d;
   --home-accent: #f2a93c;
   --home-accent-dark: #1f1400;
+  --filemgmt-accent: #3cc9f2;
+  --filemgmt-accent-dark: #00212b;
 }
 
 body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #310047, #17072e 62%); }
-.shell { max-width: 1800px; margin: 0 auto; padding: 1.5rem clamp(1.5rem, 3vw, 4rem); box-sizing: border-box; }
-.hero { margin-bottom: 1rem; }
-.tool-nav { display: flex; gap: .5rem; margin-bottom: 1rem; }
-.tool-pill { display: inline-block; padding: .5rem 1rem; border-radius: 999px; border: 1px solid var(--border); background: rgba(23, 7, 46, .68); color: var(--muted); text-decoration: none; font-size: .9rem; }
+.shell { padding: 1.5rem clamp(1.5rem, 3vw, 3rem); box-sizing: border-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* Page name + search + nav live in a fixed-width left column; the content column stretches to fill
+   whatever width remains, so the workspace uses the full screen instead of a centered, capped column. */
+.page-layout { display: flex; align-items: flex-start; gap: 1.5rem; }
+/* width/min-width/max-width are pinned in addition to the flex shorthand: a flex item's automatic
+   minimum size can otherwise let it grow past its basis to fit its content (e.g. a long paragraph),
+   which is exactly how this sidebar ended up rendering at different widths on different pages before. */
+.page-sidebar { flex: 0 0 17rem; width: 17rem; min-width: 17rem; max-width: 17rem; position: sticky; top: 1.5rem; box-sizing: border-box; container-type: inline-size; }
+.page-content { flex: 1; min-width: 0; }
+
+/* Order-independent vertical rhythm: every direct child of these containers gets a consistent gap
+   from whatever precedes it, so reordering top-level sections never reintroduces a missing or
+   doubled gap the way per-element margin-top/margin-bottom pairings used to. */
+.page-sidebar > * + *, .page-content > * + * { margin-top: 1rem; }
+
+.sidebar-search { position: relative; }
+.sidebar-search-label { margin-bottom: .3rem; }
+.global-search-results { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin-top: .35rem; padding: .4rem; background: rgba(13, 3, 27, .97); border: 1px solid var(--border); border-radius: .5rem; box-shadow: 0 1rem 2rem rgba(0,0,0,.4); max-height: 22rem; overflow-y: auto; }
+.search-section-heading { margin: .5rem 0 .25rem; padding: 0 .3rem; color: var(--plasma); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; }
+.search-section-heading:first-child { margin-top: .1rem; }
+.search-result { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; width: 100%; text-align: left; background: transparent; border: none; border-radius: .35rem; padding: .45rem .5rem; color: inherit; }
+.search-result:hover, .search-result:focus-visible { background: var(--violet); }
+.search-result-meta { color: var(--muted); font-size: .75rem; }
+.search-empty { margin: 0; padding: .4rem .3rem; color: var(--muted); font-size: .85rem; }
+
+.tool-nav { display: flex; flex-direction: column; gap: .4rem; }
+.tool-pill { display: block; width: 100%; box-sizing: border-box; padding: .5rem 1rem; border-radius: .6rem; border: 1px solid var(--border); background: rgba(23, 7, 46, .68); color: var(--muted); text-decoration: none; font-size: .9rem; }
 .tool-pill:hover { background: var(--violet); color: #fff; }
 .tool-pill.active { background: var(--violet); border-color: var(--magenta); color: #fff; }
 .tool-pill.tool-pill-home { border-color: var(--home-accent); color: var(--home-accent); }
 .tool-pill.tool-pill-home:hover { background: var(--home-accent); color: var(--home-accent-dark); }
 .tool-pill.tool-pill-home.active { background: var(--home-accent); border-color: var(--home-accent); color: var(--home-accent-dark); }
+.tool-pill.tool-pill-filemgmt { border-color: var(--filemgmt-accent); color: var(--filemgmt-accent); }
+.tool-pill.tool-pill-filemgmt:hover { background: var(--filemgmt-accent); color: var(--filemgmt-accent-dark); }
+.tool-pill.tool-pill-filemgmt.active { background: var(--filemgmt-accent); border-color: var(--filemgmt-accent); color: var(--filemgmt-accent-dark); }
 .eyebrow { color: var(--plasma); text-transform: uppercase; letter-spacing: .12em; font-size: .75rem; margin: 0 0 .25rem; }
-h1 { margin: .25rem 0; font-size: clamp(2rem, 5vw, 4rem); color: #fff7ff; }
+/* Sized off the sidebar's own (fixed) width via a container query, not the viewport -- the sidebar
+   no longer changes width with the viewport, so a vw-based size could still overhang its column. */
+h1 { margin: .25rem 0; font-size: clamp(1.5rem, 14cqi, 2.25rem); color: #fff7ff; line-height: 1.15; }
 h2, h3 { margin: .35rem 0 .6rem; }
 .card { background: rgba(49, 0, 71, .92); border: 1px solid var(--border); border-radius: .8rem; padding: 1rem; box-shadow: 0 1rem 3rem rgba(0,0,0,.28); }
-.status-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem); gap: 1rem; align-items: center; margin-bottom: 1rem; }
+.status-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem); gap: 1rem; align-items: center; }
 .reviewer-control { padding: .8rem; background: rgba(23, 7, 46, .68); border: 1px solid var(--violet); border-radius: .6rem; }
 .workspace { display: grid; grid-template-columns: minmax(20rem, 25rem) minmax(0, 1fr); gap: 1rem; align-items: stretch; }
 .navigation-card { min-height: 40rem; }
 .editor-card { min-height: 40rem; }
-.tools-card, .export-card { margin-top: 1rem; }
-.repository-card { margin-bottom: 1rem; }
-.repository-status-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
-.repository-status { display: grid; gap: .25rem; padding: .75rem; background: rgba(23, 7, 46, .68); border: 1px solid var(--violet); border-radius: .5rem; }
-.repository-clean { color: #52f0b0; }
-.repository-dirty { color: #f2a9dd; }
+.repository-status-detail { display: grid; gap: .25rem; margin: 1rem 0; padding: .75rem; background: rgba(23, 7, 46, .68); border: 1px solid var(--violet); border-radius: .5rem; }
+.repository-clean { color: #52f0b0; margin: 0; font-weight: 600; }
+.repository-dirty { color: #f2a9dd; margin: 0; font-weight: 600; }
+.repository-controls { display: grid; gap: .75rem; margin-top: 1rem; }
+.control-row { display: flex; gap: .6rem; align-items: end; }
+.control-field { flex: 1; min-width: 0; }
+.control-row button { width: auto; white-space: nowrap; }
+.open-actions-group { margin-top: .5rem; }
+.open-actions-row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.open-actions-row .metadata { white-space: nowrap; }
+.open-actions-row button { width: auto; }
+.about-card p { margin: .6rem 0; }
+.about-tool-list { margin: .75rem 0; padding-left: 1.25rem; display: grid; gap: .35rem; }
 .changed-file-list { display: grid; gap: .35rem; margin-top: .5rem; max-height: 18rem; overflow: auto; }
 .changed-file { border: 1px solid var(--border); border-radius: .4rem; padding: .35rem .5rem; background: rgba(23, 7, 46, .5); }
 .changed-file summary { cursor: pointer; font-size: .82rem; overflow-wrap: anywhere; color: var(--muted); }
 .changed-file[open] summary { color: inherit; }
 .changed-file .diff-output { margin-top: .5rem; font-size: .78rem; max-height: 20rem; }
-.workflow-controls { display: grid; grid-template-columns: minmax(7rem, .4fr) minmax(0, 1fr) minmax(7rem, .4fr) minmax(0, 1fr) auto; gap: .6rem; align-items: end; }
-.workflow-controls label { align-self: end; }
-.workflow-controls button { width: auto; }
-.section-heading, .filter-heading, .button-row, .config-group-heading { display: flex; gap: .75rem; align-items: center; justify-content: space-between; }
+.section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.filter-heading, .button-row, .config-group-heading { display: flex; gap: .75rem; align-items: center; justify-content: space-between; }
 .editor-heading { align-items: flex-start; margin-top: 1rem; }
 .filter-heading { margin-top: 1.25rem; }
 .filter-heading h3 { margin: 0; }
@@ -64,6 +101,33 @@ button:disabled { cursor: wait; opacity: .55; }
 .text-button { width: auto; padding: .25rem .5rem; font-size: .8rem; }
 .button-row { justify-content: flex-start; margin-top: .75rem; flex-wrap: wrap; }
 .button-row button { width: auto; }
+
+/* Shared "Open in..." menu (see open-in-menu.js) -- used by Content Graph and Lore Editor. The menu
+   itself is portaled to <body> and positioned via Floating UI with strategy:'fixed', so it floats free
+   of any scrolling ancestor instead of extending it -- position/size here, x/y come from JS. */
+.open-in-toggle { width: auto; font-size: .8rem; padding: .4rem .7rem; }
+.open-in-list {
+  position: fixed;
+  z-index: 1000;
+  min-width: 9rem;
+  background: rgba(13, 3, 27, .97);
+  border: 1px solid var(--border);
+  border-radius: .4rem;
+  overflow: hidden;
+  box-shadow: 0 .5rem 1.5rem rgba(0, 0, 0, .4);
+}
+.open-in-list button {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  padding: .5rem .7rem;
+  font-size: .8rem;
+}
+.open-in-list button:hover { background: var(--orchid); color: #fff; }
 fieldset { border: 1px solid var(--border); border-radius: .55rem; margin: 1rem 0; padding: .75rem; }
 .compact-fieldset { margin: 1rem 0; }
 legend { color: var(--plasma); padding: 0 .35rem; }
@@ -89,7 +153,7 @@ legend { color: var(--plasma); padding: 0 .35rem; }
 .preview-grid > div, .asset-panel { padding: .75rem; background: rgba(23, 7, 46, .68); border: 1px solid var(--violet); border-radius: .5rem; min-width: 0; }
 .asset-panel { display: flex; flex-direction: column; gap: .4rem; }
 .icon-preview { display: block; image-rendering: pixelated; width: 160px; height: 160px; margin: 1rem auto .25rem; background: repeating-conic-gradient(#660094 0 25%, #310047 0 50%) 50% / 1rem 1rem; border: 1px solid var(--border); }
-.metadata { color: var(--muted); overflow-wrap: anywhere; }
+.metadata { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
 .validation-panel { min-height: 2rem; color: #ffb4e4; margin: 1rem 0; white-space: pre-wrap; }
 .tool-list { display: flex; flex-wrap: wrap; gap: .6rem; }
 .tool-list button { width: auto; }
@@ -104,7 +168,12 @@ legend { color: var(--plasma); padding: 0 .35rem; }
 .group-editor[hidden] { display: none; }
 .group-editor label:not(:first-child) { margin-top: .75rem; }
 @media (max-width: 980px) {
-  .status-card, .workspace, .preview-grid, .icon-preview-grid, .repository-status-list, .workflow-controls { grid-template-columns: 1fr; }
+  .status-card, .workspace, .preview-grid, .icon-preview-grid { grid-template-columns: 1fr; }
+  .control-row { flex-direction: column; align-items: stretch; }
   .navigation-card, .editor-card { min-height: auto; }
   .entry-list { max-height: 24rem; }
+  .page-layout { flex-direction: column; }
+  .page-sidebar { position: static; flex-basis: auto; width: 100%; min-width: 0; max-width: none; }
+  .tool-nav { flex-direction: row; flex-wrap: wrap; }
+  .tool-pill { width: auto; }
 }

@@ -111,6 +111,10 @@ class LoreCorpus:
     entries: tuple[LoreEntry, ...]
 
 
+KEYWORD_SCOPE_FIELDS = ("type_path", "parent_type", "label", "name", "description")
+DEFAULT_KEYWORD_SCOPE = ("name", "description", "label")
+
+
 @dataclass(frozen=True)
 class GroupRecord:
 	id: str
@@ -118,6 +122,7 @@ class GroupRecord:
 	color: str
 	keywords: tuple[str, ...]
 	type_path_prefixes: tuple[str, ...]
+	keyword_scope: tuple[str, ...] = DEFAULT_KEYWORD_SCOPE
 
 
 @dataclass(frozen=True)

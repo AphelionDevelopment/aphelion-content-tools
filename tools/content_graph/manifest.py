@@ -23,6 +23,7 @@ class GraphManifest:
 	marker_count: int
 	file_count: int = 0
 	directory_count: int = 0
+	reference_count: int = 0
 	format_version: int = MANIFEST_FORMAT_VERSION
 
 	def to_dict(self) -> dict[str, object]:
@@ -38,6 +39,7 @@ class GraphManifest:
 			"marker_count": self.marker_count,
 			"file_count": self.file_count,
 			"directory_count": self.directory_count,
+			"reference_count": self.reference_count,
 		}
 
 	@classmethod
@@ -52,7 +54,7 @@ class GraphManifest:
 			if not isinstance(value, int) or value < 0:
 				raise ValueError(f"Graph manifest {field_name} must be a non-negative integer.")
 			counts[field_name] = value
-		for field_name in ("file_count", "directory_count"):
+		for field_name in ("file_count", "directory_count", "reference_count"):
 			value = payload.get(field_name, 0)
 			if not isinstance(value, int) or value < 0:
 				raise ValueError(f"Graph manifest {field_name} must be a non-negative integer.")

@@ -5,14 +5,17 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from threading import Lock
 
 from tools.dmi import Dmi
 
+from webapp.git_adapter import find_line_in_tracked_files
+
 from .generate import GENERATED_DM_PATH, write_generated_dm
 from .icon_preview import list_icon_files, list_icon_states
-from .model import GroupConfig, GroupRecord, LoreCorpus, LoreEntry, ReviewRecord, ValidationIssue, thaw_json
+from .model import DEFAULT_KEYWORD_SCOPE, GroupConfig, GroupRecord, LoreCorpus, LoreEntry, ReviewRecord, ValidationIssue, thaw_json
 from .source import ENTITIES_ROOT, iter_entity_paths, load_corpus, make_lore_entry, read_json_file, resolve_repo_path
 from .taxonomy import REVIEW_STATUSES, classify_target_details, load_groups, load_reviews, save_group, save_group_assignments, save_review
 from .validation import validate_corpus
@@ -335,6 +338,32 @@ def _target_visibility_metadata(targets: tuple[dict[str, object], ...]) -> dict[
 	return metadata
 
 
+_ERE_SPECIAL_CHARACTERS = re.compile(r"([.*+?^${}()|\[\]\\])")
+
+
+def find_type_definition(game_repo_root: Path, type_path: str) -> dict[str, object] | None:
+	"""Best-effort search for the .dm source line that defines `type_path`.
+
+	The catalog probe records only the type path and its scanned field values -- no source file or line
+	is tracked anywhere -- so this searches the live game checkout directly via `git grep` for a `.dm`
+	line consisting of exactly this type path. tgstation-style codebases almost always write each type's
+	own definition on such a line, so this is reliable for the base/original definition; it does not
+	distinguish that from a later reopen of the same type elsewhere, so the first match (git's own
+	tree-order, which sorts before any modular_*/master_files override directories) is used. Returns
+	None if no match is found.
+
+	The trailing `\r?` tolerates CRLF line endings, which DM source on a Windows checkout almost always
+	has -- `$` alone does not match before a literal trailing carriage return.
+	"""
+	if not type_path:
+		return None
+	escaped = _ERE_SPECIAL_CHARACTERS.sub(r"\\\1", type_path)
+	matches = find_line_in_tracked_files(game_repo_root, f"^{escaped}\r?$", glob="*.dm")
+	if not matches:
+		return None
+	return {"path": matches[0]["path"], "line": matches[0]["line"]}
+
+
 def _group_payload(group: GroupRecord) -> dict[str, object]:
 	return {
 		"id": group.id,
@@ -342,6 +371,7 @@ def _group_payload(group: GroupRecord) -> dict[str, object]:
 		"color": group.color,
 		"keywords": list(group.keywords),
 		"type_path_prefixes": list(group.type_path_prefixes),
+		"keyword_scope": list(group.keyword_scope),
 	}
 
 
@@ -651,8 +681,10 @@ def save_group_response(repo_root: Path, payload: object) -> dict[str, object]:
 	for field_name in ("id", "label", "color"):
 		if not isinstance(payload.get(field_name), str):
 			raise ValueError(f"Group payload requires a string {field_name}.")
-	for field_name in ("keywords", "type_path_prefixes"):
-		field_value = payload.get(field_name, [])
+	for field_name in ("keywords", "type_path_prefixes", "keyword_scope"):
+		if field_name not in payload:
+			continue
+		field_value = payload[field_name]
 		if not isinstance(field_value, list) or any(not isinstance(value, str) for value in field_value):
 			raise ValueError(f"Group payload {field_name} must be an array of strings.")
 	group = GroupRecord(
@@ -661,6 +693,7 @@ def save_group_response(repo_root: Path, payload: object) -> dict[str, object]:
 		color=payload["color"],
 		keywords=tuple(payload.get("keywords", [])),
 		type_path_prefixes=tuple(payload.get("type_path_prefixes", [])),
+		keyword_scope=tuple(payload["keyword_scope"]) if "keyword_scope" in payload else DEFAULT_KEYWORD_SCOPE,
 	)
 	save_group(repo_root, group)
 	assignments = payload.get("assignments", [])

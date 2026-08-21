@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>File Management — Aphelion Content Tools</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <div class="page-layout">
+      <aside class="page-sidebar">
+        <header class="hero">
+          <p class="eyebrow">Aphelion Content Tools</p>
+          <h1>File Management</h1>
+          <p>Repository status, local Git actions, game-repository export, and cache/storage management, all in one place.</p>
+        </header>
+
+        <div class="sidebar-search">
+          <label for="global-search" class="sidebar-search-label">Search</label>
+          <input id="global-search" class="global-search-input" type="search" placeholder="Search catalog entries or pages…">
+          <div class="global-search-results" hidden></div>
+        </div>
+
+        <nav class="tool-nav" aria-label="Tools">
+          <a class="tool-pill tool-pill-home" href="/">Home</a>
+          <span class="tool-pill tool-pill-filemgmt active" aria-current="page">File Management</span>
+          <a class="tool-pill" href="/lore-editor">Lore Editor</a>
+          <a class="tool-pill" href="/graph">Content Graph</a>
+        </nav>
+      </aside>
+
+      <div class="page-content">
+    <section class="card tools-card" aria-label="Cache and storage management">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Repository operations</p>
+          <h2>Cache and Storage Management</h2>
+          <p class="metadata">
+            Background jobs that keep the Lore Editor's Catalog and the Content Graph's cache in sync with
+            the game checkout. None of these run automatically — the Catalog, generated DM artifact, and
+            content graph are all snapshots on disk, so re-run the relevant job here after pulling new
+            game-repo changes or hand-editing files outside the app, before trusting what the other pages show.
+            Hover a button below for what it does and when to use it.
+          </p>
+        </div>
+      </div>
+      <div id="tool-list" class="tool-list"></div>
+      <pre id="tool-output" class="tool-output" aria-live="polite"></pre>
+      <p id="tool-log-path" class="metadata"></p>
+    </section>
+
+    <section class="card repository-section" aria-label="Aphelion Content Tools repository">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Local Git workflow</p>
+          <h2>Aphelion Content Tools</h2>
+          <p class="metadata">This tool's own checkout — override JSON, group configuration, and the generated lore artifact live here.</p>
+        </div>
+        <button id="tool-refresh-button" class="secondary-button" type="button">Refresh status</button>
+      </div>
+      <div id="tool-status" class="repository-status-detail"></div>
+      <div class="repository-controls">
+        <div class="control-row">
+          <div class="control-field">
+            <label for="tool-branch-select">Switch branch</label>
+            <select id="tool-branch-select"></select>
+          </div>
+          <button id="tool-switch-branch-button" class="secondary-button" type="button">Switch</button>
+        </div>
+        <div class="control-row">
+          <div class="control-field">
+            <label for="tool-branch-name">New local branch</label>
+            <input id="tool-branch-name" type="text" placeholder="lore/company-review">
+          </div>
+          <button id="tool-create-branch-button" type="button">Create branch</button>
+        </div>
+        <div class="control-row">
+          <div class="control-field">
+            <label for="tool-commit-message">Commit message</label>
+            <input id="tool-commit-message" type="text" placeholder="Update lore review decisions">
+          </div>
+          <button id="tool-commit-button" type="button">Commit changed files</button>
+        </div>
+        <div class="button-row">
+          <button id="tool-open-desktop-button" class="secondary-button" type="button">Open in GitHub Desktop</button>
+        </div>
+      </div>
+      <p id="tool-message" class="metadata" aria-live="polite"></p>
+    </section>
+
+    <section class="card repository-section" aria-label="Meridian-Rift repository">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Local Git workflow</p>
+          <h2>Meridian-Rift</h2>
+          <p class="metadata">The game checkout. Pushes, pull requests, and complex merges stay in GitHub Desktop — this only makes local commits.</p>
+        </div>
+        <button id="game-refresh-button" class="secondary-button" type="button">Refresh status</button>
+      </div>
+      <div id="game-status" class="repository-status-detail"></div>
+      <div class="repository-controls">
+        <div class="control-row">
+          <div class="control-field">
+            <label for="game-branch-select">Switch branch</label>
+            <select id="game-branch-select"></select>
+          </div>
+          <button id="game-switch-branch-button" class="secondary-button" type="button">Switch</button>
+        </div>
+        <div class="control-row">
+          <div class="control-field">
+            <label for="game-branch-name">New local branch</label>
+            <input id="game-branch-name" type="text" placeholder="lore/company-review">
+          </div>
+          <button id="game-create-branch-button" type="button">Create branch</button>
+        </div>
+        <div class="control-row">
+          <div class="control-field">
+            <label for="game-commit-message">Commit message</label>
+            <input id="game-commit-message" type="text" placeholder="Update lore review decisions">
+          </div>
+          <button id="game-commit-button" type="button">Commit changed files</button>
+        </div>
+        <div class="button-row">
+          <button id="game-open-desktop-button" class="secondary-button" type="button">Open in GitHub Desktop</button>
+        </div>
+      </div>
+      <p id="game-message" class="metadata" aria-live="polite"></p>
+
+      <div class="export-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Repository operations</p>
+            <h2>Stage a Commit</h2>
+            <p class="metadata">
+              Writes the generated lore override artifact into this checkout so it's ready to commit. Three
+              steps, always in order: <strong>generate</strong> builds and validates the artifact outside
+              the game checkout — it never touches Meridian-Rift and is always safe to run; <strong>select</strong>
+              the prepared stage to apply, defaulting to the most recently generated one; then
+              <strong>apply</strong> writes it into the game checkout and opens GitHub Desktop so you can
+              review the diff and commit it.
+            </p>
+          </div>
+        </div>
+
+        <h3>1. Generate a New Stage</h3>
+        <div class="button-row">
+          <button id="prepare-export-button" class="secondary-button" type="button">Prepare Stage</button>
+        </div>
+
+        <h3>2. Select a Stage to Apply</h3>
+        <select id="export-stage-select" aria-label="Stage to apply"><option value="">No prepared stages — prepare one first</option></select>
+
+        <h3>3. Apply Selected Stage</h3>
+        <div class="button-row">
+          <button id="apply-export-button" class="secondary-button" type="button">Apply Stage</button>
+        </div>
+
+        <pre id="export-output" class="tool-output" aria-live="polite"></pre>
+      </div>
+    </section>
+      </div>
+    </div>
+  </main>
+  <script src="/shell.js"></script>
+  <script src="/file-management.js"></script>
+</body>
+</html>
