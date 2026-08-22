@@ -217,6 +217,104 @@ class ApiWriteTests(unittest.TestCase):
 		self.assertEqual(source_path.read_bytes(), original_source)
 		self.assertEqual(generated_path.read_bytes(), b"original generated\n")
 
+	def test_delete_entry_removes_one_entry_from_a_shared_group_file(self) -> None:
+		from tools.lore_editor.api import delete_entry
+
+		repo_root, source_path = self.make_repo()
+		write_json(
+			repo_root / "config/aphelion/lore_overhaul/targets.json",
+			[
+				{"type_path": "/obj/item/radio", "label": "Radio", "field_profile": "atom_like"},
+				{"type_path": "/obj/item/megaphone", "label": "Megaphone", "field_profile": "atom_like"},
+			],
+		)
+		write_json(
+			source_path,
+			[
+				{"id": "items.radio", "type_path": "/obj/item/radio", "name": "Old radio"},
+				{"id": "items.megaphone", "type_path": "/obj/item/megaphone", "name": "Old megaphone"},
+			],
+		)
+
+		result = delete_entry(
+			repo_root,
+			entry_id="items.radio",
+			source_file="config/aphelion/lore_overhaul/entities/items.json",
+		)
+
+		self.assertEqual(result, {"deleted": True, "id": "items.radio"})
+		remaining = json.loads(source_path.read_text(encoding="utf-8"))
+		self.assertEqual([entry["id"] for entry in remaining], ["items.megaphone"])
+
+	def test_delete_entry_removes_the_file_when_the_last_entry_is_deleted(self) -> None:
+		from tools.lore_editor.api import delete_entry
+
+		repo_root, source_path = self.make_repo()
+
+		delete_entry(
+			repo_root,
+			entry_id="items.radio",
+			source_file="config/aphelion/lore_overhaul/entities/items.json",
+		)
+
+		self.assertFalse(source_path.exists())
+
+	def test_delete_entry_regenerates_the_dm_stage(self) -> None:
+		from tools.lore_editor.api import delete_entry
+
+		repo_root, _source_path = self.make_repo()
+		generated_path = repo_root / "modular_aphelion/modules/lore_overhaul/code/generated_lore_overrides.dm"
+
+		delete_entry(
+			repo_root,
+			entry_id="items.radio",
+			source_file="config/aphelion/lore_overhaul/entities/items.json",
+		)
+
+		self.assertNotIn("Old radio", generated_path.read_text(encoding="utf-8"))
+
+	def test_delete_entry_rejects_an_unknown_entry_id(self) -> None:
+		from tools.lore_editor.api import delete_entry
+
+		repo_root, _source_path = self.make_repo()
+		with self.assertRaisesRegex(ValueError, "was not found"):
+			delete_entry(
+				repo_root,
+				entry_id="items.nonexistent",
+				source_file="config/aphelion/lore_overhaul/entities/items.json",
+			)
+
+	def test_delete_entry_rejects_source_path_traversal(self) -> None:
+		from tools.lore_editor.api import delete_entry
+
+		repo_root, _source_path = self.make_repo()
+		with self.assertRaises(ValueError):
+			delete_entry(
+				repo_root,
+				entry_id="items.radio",
+				source_file="config/aphelion/lore_overhaul/entities/../targets.json",
+			)
+
+	def test_delete_entry_failure_restores_source_and_generated_bytes(self) -> None:
+		from tools.lore_editor.api import delete_entry
+
+		repo_root, source_path = self.make_repo()
+		generated_path = repo_root / "modular_aphelion/modules/lore_overhaul/code/generated_lore_overrides.dm"
+		generated_path.parent.mkdir(parents=True, exist_ok=True)
+		generated_path.write_bytes(b"original generated\n")
+		original_source = source_path.read_bytes()
+
+		with patch("tools.lore_editor.api.write_generated_dm", side_effect=ValueError("generation failed")):
+			with self.assertRaisesRegex(ValueError, "generation failed"):
+				delete_entry(
+					repo_root,
+					entry_id="items.radio",
+					source_file="config/aphelion/lore_overhaul/entities/items.json",
+				)
+
+		self.assertEqual(source_path.read_bytes(), original_source)
+		self.assertEqual(generated_path.read_bytes(), b"original generated\n")
+
 
 if __name__ == "__main__":
 	unittest.main()

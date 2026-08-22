@@ -1,10 +1,17 @@
 {
-  "color": "#1521d1",
   "id": "nanotrasen",
+  "label": "Nanotrasen",
+  "color": "#1521d1",
   "keywords": [
     "nanotrasen",
     "nt"
   ],
-  "label": "Nanotrasen",
-  "type_path_prefixes": []
+  "type_path_prefixes": [],
+  "keyword_scope": [
+    "name",
+    "description",
+    "label",
+    "type_path",
+    "parent_type"
+  ]
 }

@@ -380,6 +380,7 @@ function setEditorControls() {
   document.querySelector('#save-button').hidden = !canEdit;
   document.querySelector('#override-source-editor').hidden = !state.selected || state.selected.has_override;
   document.querySelector('#create-override-button').hidden = !state.selected || state.selected.has_override || state.editing;
+  document.querySelector('#remove-override-button').hidden = !state.selected || !state.selected.has_override;
 }
 
 // The "Open in..." menu itself (floating positioning, the three actions) is a shared component -- see
@@ -695,6 +696,29 @@ function createOverride() {
   setEditorControls();
 }
 
+async function removeOverride() {
+  if (!state.selected || !state.selected.has_override) return;
+  const label = state.selected.name || state.selected.base_name || state.selected.type_path;
+  if (!window.confirm('Remove the override for "' + label + '"? It will revert to its base catalog definition.')) return;
+  const removeButton = document.querySelector('#remove-override-button');
+  removeButton.disabled = true;
+  try {
+    await requestJson('/api/entries/' + encodeURIComponent(state.selected.id), {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source_file: state.selected.source_file}),
+    });
+    setText('#status-message', 'Override removed and generated.');
+    const typePath = state.selected.type_path;
+    await loadReviewEntries();
+    refreshReviewTarget(typePath);
+  } catch (error) {
+    setText('#status-message', error.message);
+  } finally {
+    removeButton.disabled = false;
+  }
+}
+
 function selectedSourceFile() {
   if (state.selected.has_override) return state.selected.source_file;
   const newGroup = document.querySelector('#new-override-group').value.trim();
@@ -828,6 +852,7 @@ function attachEditorEvents() {
   document.querySelector('#icon-state').addEventListener('change', () => { state.iconDraftChanged = true; updateIconPreviews(); });
   document.querySelector('#entry-form').addEventListener('submit', saveEntry);
   document.querySelector('#create-override-button').addEventListener('click', createOverride);
+  document.querySelector('#remove-override-button').addEventListener('click', () => removeOverride().catch((error) => setText('#status-message', error.message)));
   document.querySelector('#mark-reviewed-button').addEventListener('click', () => saveReview('reviewed').catch((error) => setText('#status-message', error.message)));
   document.querySelector('#flag-attention-button').addEventListener('click', () => saveReview('needs-attention').catch((error) => setText('#status-message', error.message)));
   document.querySelector('#clear-review-button').addEventListener('click', () => saveReview(null).catch((error) => setText('#status-message', error.message)));

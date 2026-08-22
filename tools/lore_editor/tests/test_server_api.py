@@ -133,6 +133,27 @@ class ServerApiTests(unittest.TestCase):
 		self.assertEqual(generate_status, 200)
 		self.assertTrue(generated["generated"])
 
+	def test_delete_entry_route_removes_the_override(self) -> None:
+		delete_status, _delete_type, deleted = self.request(
+			"/api/entries/items.radio",
+			method="DELETE",
+			payload={"source_file": "config/aphelion/lore_overhaul/entities/items.json"},
+		)
+		self.assertEqual(delete_status, 200)
+		self.assertTrue(deleted["deleted"])
+
+		entries_status, _entries_type, entries = self.request("/api/entries")
+		self.assertEqual(entries_status, 200)
+		self.assertEqual(entries["entries"], [])
+
+		missing_status, _missing_type, missing = self.request(
+			"/api/entries/items.radio",
+			method="DELETE",
+			payload={"source_file": "config/aphelion/lore_overhaul/entities/items.json"},
+		)
+		self.assertEqual(missing_status, 400)
+		self.assertIn("does not exist", missing["error"])
+
 	def test_review_endpoint_includes_catalog_targets_without_overrides(self) -> None:
 		status, _content_type, review = self.request("/api/review")
 		self.assertEqual(status, 200)

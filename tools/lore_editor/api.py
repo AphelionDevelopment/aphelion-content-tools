@@ -968,6 +968,52 @@ def save_entry(
 	raise ValueError(f"Saved lore entry '{entry_id}' could not be reloaded.")
 
 
+def delete_entry(
+	repo_root: Path,
+	*,
+	entry_id: str,
+	source_file: str,
+) -> dict[str, object]:
+	resolved_root = repo_root.resolve()
+	layout = WorkspaceLayout.from_root(resolved_root)
+	source_path = _resolve_entity_source(resolved_root, source_file)
+	original_source_path = resolved_root / source_path
+	original_source_bytes = original_source_path.read_bytes()
+	original_document = read_json_file(resolved_root, source_path)
+
+	if isinstance(original_document, list):
+		remaining_document = [
+			raw_entry for raw_entry in original_document
+			if not (isinstance(raw_entry, dict) and raw_entry.get("id") == entry_id)
+		]
+		if len(remaining_document) == len(original_document):
+			raise ValueError(f"Lore entry '{entry_id}' was not found in its source file.")
+	elif isinstance(original_document, dict) and original_document.get("id") == entry_id:
+		remaining_document = None
+	else:
+		raise ValueError(f"Lore entry '{entry_id}' was not found in its source file.")
+
+	generated_path = resolved_root / layout.generated_dm_path
+	original_generated_exists = generated_path.exists()
+	original_generated_bytes = generated_path.read_bytes() if original_generated_exists else None
+	try:
+		if remaining_document:
+			serialized_document = (json.dumps(remaining_document, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+			_atomic_write(original_source_path, serialized_document)
+		else:
+			original_source_path.unlink()
+		write_generated_dm(resolved_root)
+	except Exception:
+		_atomic_write(original_source_path, original_source_bytes)
+		if original_generated_exists and original_generated_bytes is not None:
+			_atomic_write(generated_path, original_generated_bytes)
+		elif generated_path.exists():
+			generated_path.unlink()
+		raise
+
+	return {"deleted": True, "id": entry_id}
+
+
 def generate_output(repo_root: Path) -> dict[str, object]:
 	generated_path = repo_root.resolve() / WorkspaceLayout.from_root(repo_root).generated_dm_path
 	original_bytes = generated_path.read_bytes() if generated_path.exists() else None

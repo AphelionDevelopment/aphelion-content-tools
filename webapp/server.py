@@ -26,7 +26,7 @@ def _query_int(query: dict[str, list[str]], name: str, *, default: int | None = 
 
 def _load_api_functions():
 	from tools.lore_editor.api import catalog_response, find_type_definition, generate_output, groups_response, icon_files_response, icon_states_response, list_entries_response, list_icon_choices, list_review_response
-	from tools.lore_editor.api import create_entry, list_entity_files, save_group_response, save_review_response
+	from tools.lore_editor.api import create_entry, delete_entry, list_entity_files, save_group_response, save_review_response
 	from tools.lore_editor.api import save_entry, validate_entries, validate_entry
 	from tools.lore_editor.icon_preview import IconPreviewNotFound, render_icon_preview
 	return {
@@ -35,6 +35,7 @@ def _load_api_functions():
 		"list_entries_response": list_entries_response,
 		"list_icon_choices": list_icon_choices,
 		"save_entry": save_entry,
+		"delete_entry": delete_entry,
 		"validate_entries": validate_entries,
 		"validate_entry": validate_entry,
 		"IconPreviewNotFound": IconPreviewNotFound,
@@ -820,6 +821,30 @@ class WebAppRequestHandler(BaseHTTPRequestHandler):
 				asset_root=self.server.game_repo_root,
 			)
 			self.send_json({"saved": True, "entry": saved_entry, "issues": []})
+		except (OSError, ValueError) as exc:
+			self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+
+	def do_DELETE(self) -> None:
+		parsed = urlparse(self.path)
+		prefix = "/api/entries/"
+		if not parsed.path.startswith(prefix):
+			self.send_error_json(HTTPStatus.NOT_FOUND, "Resource not found.")
+			return
+		entry_id = unquote(parsed.path[len(prefix):])
+		if not entry_id or "/" in entry_id:
+			self.send_error_json(HTTPStatus.BAD_REQUEST, "A single lore entry id is required.")
+			return
+		try:
+			payload = self.read_json_body()
+			if not isinstance(payload, dict) or not isinstance(payload.get("source_file"), str):
+				raise ValueError("Delete request must contain a string source_file.")
+			delete_entry = _load_api_functions()["delete_entry"]
+			result = delete_entry(
+				self.server.repo_root,
+				entry_id=entry_id,
+				source_file=payload["source_file"],
+			)
+			self.send_json(result)
 		except (OSError, ValueError) as exc:
 			self.send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 

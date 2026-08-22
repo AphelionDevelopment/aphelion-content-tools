@@ -8,7 +8,7 @@ import unittest
 from PIL import Image
 
 from tools.dmi import Dmi
-from tools.lore_editor.api import create_entry, list_icon_choices, list_review_response, save_entry, save_review_response
+from tools.lore_editor.api import create_entry, delete_entry, list_icon_choices, list_review_response, save_entry, save_review_response
 
 
 class StandaloneApiTests(unittest.TestCase):
@@ -91,6 +91,18 @@ class StandaloneApiTests(unittest.TestCase):
 			"Communications radio",
 			json.loads((self.root / "tools/lore_editor/content/overrides/communications.json").read_text(encoding="utf-8"))["name"],
 		)
+
+	def test_delete_entry_removes_a_standalone_override_record_entirely(self) -> None:
+		override_path = self.root / "tools/lore_editor/content/overrides/lore.radio.json"
+
+		result = delete_entry(
+			self.root,
+			entry_id="lore.radio",
+			source_file="tools/lore_editor/content/overrides/lore.radio.json",
+		)
+
+		self.assertEqual(result, {"deleted": True, "id": "lore.radio"})
+		self.assertFalse(override_path.exists())
 
 	def test_icon_choices_read_from_configured_game_checkout(self) -> None:
 		game_root = self.root / "game"
